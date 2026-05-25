@@ -2,7 +2,7 @@ from pathlib import Path
 import torch
 from PIL import Image
 import open_clip
-
+import io # <-- NEW IMPORT
 
 class ClipModel:
     def __init__(self, model_name: str = "ViT-L-14", pretrained: str = "openai") -> None:
@@ -15,8 +15,18 @@ class ClipModel:
         self.model.eval()
         self.model.to(self.device)
 
-    def image_to_embedding(self, image_path: str | Path):
-        image = Image.open(image_path).convert("RGB")
+    def image_to_embedding(self, image_input):
+        """Now accepts a file path (str/Path) or raw bytes."""
+        
+        # Check if the input is raw bytes from our stream
+        if isinstance(image_input, bytes):
+            image = Image.open(io.BytesIO(image_input)).convert("RGB")
+        # Otherwise, treat it as a file path like before
+        elif isinstance(image_input, (str, Path)):
+            image = Image.open(image_input).convert("RGB")
+        else:
+            raise ValueError("Unsupported input type for image_to_embedding")
+
         image_tensor = self.preprocess(image).unsqueeze(0).to(self.device)
 
         with torch.no_grad():

@@ -1,10 +1,12 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from app.schemas import SearchRequest, SearchResponse, HealthResponse
 from app.services.search_service import search_images
-from app.services.indexing_service import index_local_images
+from app.services.indexing_service import index_local_images, index_single_image_stream
 from app.clip_model import ClipModel
 from app.faiss_store import FaissStore
 from pathlib import Path
+from starlette.middleware.sessions import SessionMiddleware
+from app.auth_temp import router as auth_router
 
 app = FastAPI(
     title="AI Photo Search Service",
@@ -18,6 +20,8 @@ store = None
 INDEX_PATH = Path("indexes/images.index")
 ITEMS_PATH = Path("indexes/images.json")
 
+app.add_middleware(SessionMiddleware, secret_key="temporary_secret")
+# app.include_router(auth_router)
 
 @app.on_event("startup")
 def startup_event():
@@ -66,5 +70,39 @@ def index_local():
 
     # reload index after indexing
     store = FaissStore.load(INDEX_PATH, ITEMS_PATH)
+
+    return result
+
+
+@app.post("/index/stream")
+async def index_stream(
+    file: UploadFile = File(...), 
+    image_id: str = Form(...)
+):
+    """
+    Receives an image via HTTP POST, indexes it in RAM, and discards it.
+    """
+    global model, store
+
+    if store is None:
+        # If the index is totally empty/missing at startup, initialize an empty one
+        store = FaissStore(dimension=768)
+
+    # Read the image file directly into memory
+    image_bytes = await file.read()
+
+    # Process it
+    result = index_single_image_stream(
+        image_bytes=image_bytes,
+        image_id=image_id,
+        model=model,
+        store=store
+    )
+
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+
+    # Save the updated index to disk to prevent data loss on server restart
+    store.save(INDEX_PATH, ITEMS_PATH)
 
     return result

@@ -48,3 +48,25 @@ def index_local_images(model) -> dict:
         "index_path": str(INDEX_PATH),
         "items_path": str(ITEMS_PATH),
     }
+
+
+def index_single_image_stream(image_bytes: bytes, image_id: str, model, store) -> dict:
+    """
+    Embeds raw image bytes in RAM and adds them directly to the active FAISS index.
+    """
+    try:
+        # Pass the bytes directly to our updated ClipModel
+        vector = model.image_to_embedding(image_bytes)
+        
+        # Add to the existing in-memory FAISS store
+        store.add(vector, image_id)
+        
+        return {
+            "success": True,
+            "message": f"Successfully indexed image {image_id}"
+        }
+    except Exception as exc:
+        return {
+            "success": False,
+            "message": f"Failed to process image: {str(exc)}"
+        }
