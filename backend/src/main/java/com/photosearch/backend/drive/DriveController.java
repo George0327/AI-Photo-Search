@@ -59,7 +59,7 @@ public class DriveController {
             return ResponseEntity.badRequest().build();
         }
 
-        byte[] thumbnailBytes = googleDriveService.createThumbnailBytes(fileId, 350);
+        byte[] thumbnailBytes = googleDriveService.downloadGoogleThumbnailBytes(fileId);
 
         return ResponseEntity.ok()
                 .contentType(MediaType.IMAGE_JPEG)
@@ -71,5 +71,33 @@ public class DriveController {
                                 .toString()
                 )
                 .body(thumbnailBytes);
+    }
+
+    @GetMapping("/images/{fileId}/download")
+    public ResponseEntity<byte[]> downloadImage(@PathVariable String fileId) {
+        DriveFileInfo fileInfo = googleDriveService.getFileInfo(fileId);
+
+        if (fileInfo.getMimeType() == null || !fileInfo.getMimeType().startsWith("image/")) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        byte[] imageBytes = googleDriveService.downloadFileBytes(fileId);
+
+        MediaType mediaType = MediaType.APPLICATION_OCTET_STREAM;
+
+        if (fileInfo.getMimeType() != null) {
+            mediaType = MediaType.parseMediaType(fileInfo.getMimeType());
+        }
+
+        return ResponseEntity.ok()
+                .contentType(mediaType)
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment()
+                                .filename(fileInfo.getName(), StandardCharsets.UTF_8)
+                                .build()
+                                .toString()
+                )
+                .body(imageBytes);
     }
 }

@@ -42,3 +42,7 @@ export function getImageContentUrl(fileId: string): string {
 export function getImageThumbnailUrl(fileId: string): string {
   return `${DRIVE_API_BASE}/images/${fileId}/thumbnail`;
 }
+
+export function getImageDownloadUrl(fileId: string): string {
+  return `${DRIVE_API_BASE}/images/${fileId}/download`;
+}

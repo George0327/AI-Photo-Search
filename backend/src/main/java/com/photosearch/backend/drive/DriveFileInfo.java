@@ -18,4 +18,5 @@ public class DriveFileInfo {
     private Instant modifiedTime;
     private boolean trashed;
     private boolean folder;
+    private String thumbnailLink;
 }

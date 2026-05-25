@@ -25,7 +25,7 @@ public class GoogleDriveService {
 
     private static final String FOLDER_MIME_TYPE = "application/vnd.google-apps.folder";
     private static final String FILE_FIELDS =
-            "files(id,name,mimeType,parents,createdTime,modifiedTime,trashed),nextPageToken";
+            "files(id,name,mimeType,parents,createdTime,modifiedTime,trashed,thumbnailLink,thumbnailVersion),nextPageToken";
 
     private final Drive driveClient;
     private final DriveProperties driveProperties;
@@ -82,7 +82,7 @@ public class GoogleDriveService {
         try {
             com.google.api.services.drive.model.File file = driveClient.files()
                     .get(fileId)
-                    .setFields("id,name,mimeType,parents,createdTime,modifiedTime,trashed")
+                    .setFields("id,name,mimeType,parents,createdTime,modifiedTime,trashed,thumbnailLink,thumbnailVersion")
                     .setSupportsAllDrives(false)
                     .execute();
 
@@ -165,6 +165,27 @@ public class GoogleDriveService {
         }
     }
 
+    public byte[] downloadGoogleThumbnailBytes(String fileId) {
+        DriveFileInfo fileInfo = getFileInfo(fileId);
+
+        if (!hasText(fileInfo.getThumbnailLink())) {
+            System.out.println("Google Drive file does not have a thumbnail link, creating thumbnail from original image: " + fileId);
+            return createThumbnailBytes(fileId, 350);
+        }
+
+        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            driveClient.getRequestFactory()
+                    .buildGetRequest(new com.google.api.client.http.GenericUrl(fileInfo.getThumbnailLink()))
+                    .execute()
+                    .download(outputStream);
+
+            return outputStream.toByteArray();
+        } catch (IOException e) {
+            System.out.println("Google Drive file does not have a thumbnail link, creating thumbnail from original image: " + fileId);
+            return createThumbnailBytes(fileId, 350);
+        }
+    }
+
     private List<DriveFileInfo> search(String query) {
         try {
             List<DriveFileInfo> result = new ArrayList<>();
@@ -211,6 +232,7 @@ public class GoogleDriveService {
                 .modifiedTime(toInstant(file.getModifiedTime() != null ? file.getModifiedTime().getValue() : null))
                 .trashed(Boolean.TRUE.equals(file.getTrashed()))
                 .folder(Objects.equals(FOLDER_MIME_TYPE, file.getMimeType()))
+                .thumbnailLink(file.getThumbnailLink())
                 .build();
     }
 

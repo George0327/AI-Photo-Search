@@ -28,7 +28,7 @@ target/
 .mvn/wrapper/maven-wrapper.jar
 
 # Images
-data/images/
+ai-service/data/
 
 # Node
 node_modules/
