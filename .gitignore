@@ -27,6 +27,9 @@ target/
 *.war
 .mvn/wrapper/maven-wrapper.jar
 
+# Images
+data/images/
+
 # Node
 node_modules/
 dist/
