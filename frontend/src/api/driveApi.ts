@@ -12,7 +12,9 @@ export type DriveFileInfo = {
 const DRIVE_API_BASE = "/api/drive";
 
 async function fetchJson<T>(url: string): Promise<T> {
-  const response = await fetch(url);
+  const response = await fetch(url, {
+    credentials: "include",
+  });
 
   if (!response.ok) {
     throw new Error(`Request failed: ${response.status} ${response.statusText}`);

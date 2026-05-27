@@ -1,17 +1,21 @@
+import os
+from fastapi import Depends, Header
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from app.schemas import SearchRequest, SearchResponse, HealthResponse
 from app.services.search_service import search_images
-from app.services.indexing_service import index_local_images, index_single_image_stream
+from app.services.indexing_service import index_single_image_stream
 from app.clip_model import ClipModel
 from app.faiss_store import FaissStore
 from pathlib import Path
-from starlette.middleware.sessions import SessionMiddleware
-from app.auth_temp import router as auth_router
+# from starlette.middleware.sessions import SessionMiddleware
+# from app.auth_temp import router as auth_router
 
 app = FastAPI(
     title="AI Photo Search Service",
     version="1.0.0"
 )
+
+INTERNAL_API_KEY = os.getenv("AI_SERVICE_INTERNAL_API_KEY", "dev-ai-service-key")
 
 # --- GLOBAL STATE ---
 model = None
@@ -20,8 +24,12 @@ store = None
 INDEX_PATH = Path("indexes/images.index")
 ITEMS_PATH = Path("indexes/images.json")
 
-app.add_middleware(SessionMiddleware, secret_key="temporary_secret")
+# app.add_middleware(SessionMiddleware, secret_key="temporary_secret")
 # app.include_router(auth_router)
+
+def verify_internal_api_key(x_internal_api_key: str | None = Header(default=None)):
+    if x_internal_api_key != INTERNAL_API_KEY:
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
 @app.on_event("startup")
 def startup_event():
@@ -41,6 +49,20 @@ def startup_event():
 def health_check():
     return {"status": "ok"}
 
+@app.post("/index/reset")
+def reset_index(_: None = Depends(verify_internal_api_key)):
+    global store
+
+    INDEX_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+    store = FaissStore(dimension=768)
+    store.save(INDEX_PATH, ITEMS_PATH)
+
+    return {
+        "success": True,
+        "message": "Index reset successfully"
+    }
+
 
 @app.post("/search", response_model=SearchResponse)
 def search(request: SearchRequest):
@@ -59,25 +81,26 @@ def search(request: SearchRequest):
     return result
 
 
-@app.post("/index/local")
-def index_local():
-    global model, store
+# @app.post("/index/local")
+# def index_local():
+#     global model, store
 
-    result = index_local_images(model=model)
+#     result = index_local_images(model=model)
 
-    if not result["success"]:
-        raise HTTPException(status_code=400, detail=result["message"])
+#     if not result["success"]:
+#         raise HTTPException(status_code=400, detail=result["message"])
 
-    # reload index after indexing
-    store = FaissStore.load(INDEX_PATH, ITEMS_PATH)
+#     # reload index after indexing
+#     store = FaissStore.load(INDEX_PATH, ITEMS_PATH)
 
-    return result
+#     return result
 
 
 @app.post("/index/stream")
 async def index_stream(
     file: UploadFile = File(...), 
-    image_id: str = Form(...)
+    image_id: str = Form(...),
+    _: None = Depends(verify_internal_api_key)
 ):
     """
     Receives an image via HTTP POST, indexes it in RAM, and discards it.
@@ -103,6 +126,7 @@ async def index_stream(
         raise HTTPException(status_code=400, detail=result["message"])
 
     # Save the updated index to disk to prevent data loss on server restart
+    INDEX_PATH.parent.mkdir(parents=True, exist_ok=True)
     store.save(INDEX_PATH, ITEMS_PATH)
 
     return result

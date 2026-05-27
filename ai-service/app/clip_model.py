@@ -2,7 +2,11 @@ from pathlib import Path
 import torch
 from PIL import Image
 import open_clip
-import io # <-- NEW IMPORT
+import io
+from pillow_heif import register_heif_opener
+
+register_heif_opener()
+
 
 class ClipModel:
     def __init__(self, model_name: str = "ViT-L-14", pretrained: str = "openai") -> None:
@@ -16,12 +20,10 @@ class ClipModel:
         self.model.to(self.device)
 
     def image_to_embedding(self, image_input):
-        """Now accepts a file path (str/Path) or raw bytes."""
-        
-        # Check if the input is raw bytes from our stream
+        """Accepts a file path or raw image bytes."""
+
         if isinstance(image_input, bytes):
             image = Image.open(io.BytesIO(image_input)).convert("RGB")
-        # Otherwise, treat it as a file path like before
         elif isinstance(image_input, (str, Path)):
             image = Image.open(image_input).convert("RGB")
         else:

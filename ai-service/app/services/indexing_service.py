@@ -3,7 +3,7 @@ from app.clip_model import ClipModel
 from app.faiss_store import FaissStore
 
 
-SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"}
 IMAGES_DIR = Path("data/images")
 INDEX_DIR = Path("indexes")
 INDEX_PATH = INDEX_DIR / "images.index"

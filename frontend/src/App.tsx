@@ -12,10 +12,72 @@ import {
   Title,
 } from "@mantine/core";
 import { IconBrandGoogle } from "@tabler/icons-react";
+import {
+  BrowserRouter,
+  Link,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+} from "react-router-dom";
 
 import DriveGalleryPage from "./pages/DriveGalleryPage";
+import AdminPage from "./pages/AdminPage";
 import { fetchCurrentUser, loginWithGoogle, logout } from "./api/authApi";
 import type { AuthUser } from "./api/authApi";
+
+function AppRoutes({ user }: { user: AuthUser }) {
+  const location = useLocation();
+  const isAdmin = user.authorities.includes("ROLE_ADMIN");
+
+  return (
+    <>
+      <Group justify="space-between" p="sm">
+        <Group>
+          <Button
+            component={Link}
+            to="/"
+            variant={location.pathname === "/" ? "filled" : "subtle"}
+            size="xs"
+          >
+            Gallery
+          </Button>
+
+          {isAdmin && (
+            <Button
+              component={Link}
+              to="/admin"
+              variant={location.pathname === "/admin" ? "filled" : "subtle"}
+              size="xs"
+            >
+              Admin
+            </Button>
+          )}
+        </Group>
+
+        <Group gap="xs">
+          <Avatar src={user.picture || undefined} size="sm" radius="xl" />
+          <Text size="sm">{user.email}</Text>
+
+          <Button variant="light" size="xs" onClick={logout}>
+            Logout
+          </Button>
+        </Group>
+      </Group>
+
+      <Routes>
+        <Route path="/" element={<DriveGalleryPage />} />
+
+        <Route
+          path="/admin"
+          element={isAdmin ? <AdminPage /> : <Navigate to="/" replace />}
+        />
+
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
+  );
+}
 
 export default function App() {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -70,19 +132,8 @@ export default function App() {
   }
 
   return (
-    <>
-      <Group justify="flex-end" p="sm">
-        <Group gap="xs">
-          <Avatar src={user.picture || undefined} size="sm" radius="xl" />
-          <Text size="sm">{user.email}</Text>
-        </Group>
-
-        <Button variant="light" size="xs" onClick={logout}>
-          Logout
-        </Button>
-      </Group>
-
-      <DriveGalleryPage />
-    </>
+    <BrowserRouter>
+      <AppRoutes user={user} />
+    </BrowserRouter>
   );
 }

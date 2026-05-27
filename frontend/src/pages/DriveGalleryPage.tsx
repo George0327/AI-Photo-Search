@@ -12,12 +12,22 @@ import {
   Modal,
   Pagination,
   ScrollArea,
+  Select,
   SimpleGrid,
   Stack,
   Text,
+  TextInput,
   Title,
 } from "@mantine/core";
-import { IconAlertCircle, IconPhoto, IconRefresh, IconDownload } from "@tabler/icons-react";
+import {
+  IconAlertCircle,
+  IconDownload,
+  IconPhoto,
+  IconRefresh,
+  IconSearch,
+  IconX,
+} from "@tabler/icons-react";
+
 import type { DriveFileInfo } from "../api/driveApi";
 import {
   fetchAlbums,
@@ -27,6 +37,9 @@ import {
   getImageThumbnailUrl,
 } from "../api/driveApi";
 
+import { searchPhotos } from "../api/searchApi";
+import type { PhotoSearchResult } from "../api/searchApi";
+
 const PHOTOS_PER_PAGE = 20;
 
 export default function DriveGalleryPage() {
@@ -34,27 +47,45 @@ export default function DriveGalleryPage() {
   const [selectedAlbum, setSelectedAlbum] = useState<DriveFileInfo | null>(null);
   const [images, setImages] = useState<DriveFileInfo[]>([]);
   const [previewImage, setPreviewImage] = useState<DriveFileInfo | null>(null);
+
   const [activePage, setActivePage] = useState(1);
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [topK, setTopK] = useState("10");
+  const [searchResults, setSearchResults] = useState<PhotoSearchResult[]>([]);
+  const [searchMode, setSearchMode] = useState(false);
 
   const [albumsLoading, setAlbumsLoading] = useState(false);
   const [imagesLoading, setImagesLoading] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const totalPages = Math.max(1, Math.ceil(images.length / PHOTOS_PER_PAGE));
+  const visibleImages = useMemo(() => {
+    if (searchMode) {
+      return searchResults.map((result) => result.file);
+    }
+
+    return images;
+  }, [searchMode, searchResults, images]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(visibleImages.length / PHOTOS_PER_PAGE)
+  );
 
   const paginatedImages = useMemo(() => {
     const startIndex = (activePage - 1) * PHOTOS_PER_PAGE;
     const endIndex = startIndex + PHOTOS_PER_PAGE;
 
-    return images.slice(startIndex, endIndex);
-  }, [images, activePage]);
+    return visibleImages.slice(startIndex, endIndex);
+  }, [visibleImages, activePage]);
 
-  const firstVisibleImageNumber =
-    images.length === 0 ? 0 : (activePage - 1) * PHOTOS_PER_PAGE + 1;
+  const firstVisibleNumber =
+    visibleImages.length === 0 ? 0 : (activePage - 1) * PHOTOS_PER_PAGE + 1;
 
-  const lastVisibleImageNumber = Math.min(
+  const lastVisibleNumber = Math.min(
     activePage * PHOTOS_PER_PAGE,
-    images.length
+    visibleImages.length
   );
 
   async function loadAlbums() {
@@ -90,6 +121,35 @@ export default function DriveGalleryPage() {
     }
   }
 
+  async function handleSearch() {
+    const trimmedQuery = searchQuery.trim();
+
+    if (!trimmedQuery) {
+      return;
+    }
+
+    try {
+      setError(null);
+      setSearchLoading(true);
+      setActivePage(1);
+
+      const data = await searchPhotos(trimmedQuery, Number(topK));
+      setSearchResults(data.results);
+      setSearchMode(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Search failed.");
+    } finally {
+      setSearchLoading(false);
+    }
+  }
+
+  function clearSearch() {
+    setSearchMode(false);
+    setSearchResults([]);
+    setSearchQuery("");
+    setActivePage(1);
+  }
+
   useEffect(() => {
     loadAlbums();
   }, []);
@@ -104,30 +164,10 @@ export default function DriveGalleryPage() {
   return (
     <>
       <AppShell
-        header={{ height: 72 }}
+        header={{ height: 56 }}
         navbar={{ width: 300, breakpoint: "sm" }}
         padding="md"
       >
-        <AppShell.Header>
-          <Group h="100%" px="md" justify="space-between">
-            <div>
-              <Title order={3}>Photo AI Search</Title>
-              <Text size="sm" c="dimmed">
-                Google Drive gallery
-              </Text>
-            </div>
-
-            <Button
-              leftSection={<IconRefresh size={16} />}
-              variant="light"
-              onClick={loadAlbums}
-              loading={albumsLoading}
-            >
-              Refresh albums
-            </Button>
-          </Group>
-        </AppShell.Header>
-
         <AppShell.Navbar p="md">
           <Group justify="space-between" mb="md">
             <Title order={4}>Albums</Title>
@@ -149,7 +189,10 @@ export default function DriveGalleryPage() {
                     }
                     justify="flex-start"
                     leftSection={<IconPhoto size={16} />}
-                    onClick={() => setSelectedAlbum(album)}
+                    onClick={() => {
+                      clearSearch();
+                      setSelectedAlbum(album);
+                    }}
                   >
                     {album.name}
                   </Button>
@@ -167,6 +210,23 @@ export default function DriveGalleryPage() {
 
         <AppShell.Main>
           <Stack>
+            <Group justify="space-between">
+              <div>
+                <Title order={2}>Gallery</Title>
+                <Text size="sm" c="dimmed">
+                  Browse Google Drive albums and search indexed photos.
+                </Text>
+              </div>
+
+              <Button
+                leftSection={<IconRefresh size={16} />}
+                variant="light"
+                onClick={loadAlbums}
+                loading={albumsLoading}
+              >
+                Refresh albums
+              </Button>
+            </Group>
             {error && (
               <Alert
                 color="red"
@@ -177,21 +237,32 @@ export default function DriveGalleryPage() {
               </Alert>
             )}
 
-            <Group justify="space-between">
+            <Group justify="space-between" align="flex-start">
               <div>
                 <Title order={2}>
-                  {selectedAlbum ? selectedAlbum.name : "Select an album"}
+                  {searchMode
+                    ? `Search results for "${searchQuery}"`
+                    : selectedAlbum
+                      ? selectedAlbum.name
+                      : "Select an album"}
                 </Title>
 
                 <Text size="sm" c="dimmed">
-                  {images.length} image{images.length === 1 ? "" : "s"}
-                  {images.length > PHOTOS_PER_PAGE
-                    ? ` · ${PHOTOS_PER_PAGE} per page`
-                    : ""}
+                  {searchMode
+                    ? `${searchResults.length} indexed result${
+                        searchResults.length === 1 ? "" : "s"
+                      }`
+                    : `${images.length} image${
+                        images.length === 1 ? "" : "s"
+                      }${
+                        images.length > PHOTOS_PER_PAGE
+                          ? ` · ${PHOTOS_PER_PAGE} per page`
+                          : ""
+                      }`}
                 </Text>
               </div>
 
-              {selectedAlbum && (
+              {selectedAlbum && !searchMode && (
                 <Button
                   leftSection={<IconRefresh size={16} />}
                   variant="light"
@@ -203,7 +274,63 @@ export default function DriveGalleryPage() {
               )}
             </Group>
 
-            {imagesLoading ? (
+            <Stack gap="xs">
+              <Group align="end">
+                <TextInput
+                  label="Search indexed photos"
+                  placeholder='Example: "dog", "mountain", "people at a table"'
+                  value={searchQuery}
+                  onChange={(event) =>
+                    setSearchQuery(event.currentTarget.value)
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      handleSearch();
+                    }
+                  }}
+                  style={{ flex: 1 }}
+                />
+
+                <Select
+                  label="Results"
+                  value={topK}
+                  onChange={(value) => setTopK(value ?? "10")}
+                  data={[
+                    { value: "5", label: "Top 5" },
+                    { value: "10", label: "Top 10" },
+                    { value: "20", label: "Top 20" },
+                    { value: "30", label: "Top 30" },
+                    { value: "50", label: "Top 50" },
+                    { value: "100", label: "Top 100" },
+                  ]}
+                  w={110}
+                />
+
+                <Button
+                  leftSection={<IconSearch size={16} />}
+                  onClick={handleSearch}
+                  loading={searchLoading}
+                >
+                  Search
+                </Button>
+
+                {searchMode && (
+                  <Button
+                    variant="light"
+                    leftSection={<IconX size={16} />}
+                    onClick={clearSearch}
+                  >
+                    Clear
+                  </Button>
+                )}
+              </Group>
+
+              <Text size="xs" c="dimmed">
+                Search only returns photos that were indexed by an admin.
+              </Text>
+            </Stack>
+
+            {imagesLoading || searchLoading ? (
               <Center py={80}>
                 <Loader />
               </Center>
@@ -244,11 +371,12 @@ export default function DriveGalleryPage() {
                   ))}
                 </SimpleGrid>
 
-                {images.length > PHOTOS_PER_PAGE && (
+                {visibleImages.length > PHOTOS_PER_PAGE && (
                   <Group justify="space-between" mt="md">
                     <Text size="sm" c="dimmed">
-                      Showing {firstVisibleImageNumber}–
-                      {lastVisibleImageNumber} of {images.length} photos
+                      Showing {firstVisibleNumber}–{lastVisibleNumber} of{" "}
+                      {visibleImages.length}{" "}
+                      {searchMode ? "results" : "photos"}
                     </Text>
 
                     <Pagination
@@ -263,9 +391,13 @@ export default function DriveGalleryPage() {
               </>
             )}
 
-            {!imagesLoading && selectedAlbum && images.length === 0 && (
+            {!imagesLoading && !searchLoading && visibleImages.length === 0 && (
               <Center py={80}>
-                <Text c="dimmed">No images found in this album.</Text>
+                <Text c="dimmed">
+                  {searchMode
+                    ? "No indexed photos matched this search."
+                    : "No images found in this album."}
+                </Text>
               </Center>
             )}
           </Stack>
@@ -281,25 +413,25 @@ export default function DriveGalleryPage() {
         transitionProps={{ duration: 100 }}
       >
         {previewImage && (
-        <Stack>
+          <Stack>
             <Group justify="flex-end">
-                <Button
-                    component="a"
-                    href={getImageDownloadUrl(previewImage.id)}
-                    download={previewImage.name}
-                    leftSection={<IconDownload size={16} />}
-                >
-                     Download
-                </Button>
+              <Button
+                component="a"
+                href={getImageDownloadUrl(previewImage.id)}
+                download={previewImage.name}
+                leftSection={<IconDownload size={16} />}
+              >
+                Download
+              </Button>
             </Group>
-          
-          <Image
-            src={getImageContentUrl(previewImage.id)}
-            alt={previewImage.name}
-            fit="contain"
-            mah="75vh"
-          />
-        </Stack>
+
+            <Image
+              src={getImageContentUrl(previewImage.id)}
+              alt={previewImage.name}
+              fit="contain"
+              mah="75vh"
+            />
+          </Stack>
         )}
       </Modal>
     </>

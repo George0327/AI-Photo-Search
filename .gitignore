@@ -29,6 +29,8 @@ target/
 
 # Images
 ai-service/data/
+ai-service/indexes/
+ai-service/client_secret.json
 
 # Node
 node_modules/
