@@ -1,32 +1,25 @@
+import { fetchJson } from "./apiClient";
 import type { DriveFileInfo } from "./driveApi";
 
 export type PhotoSearchResult = {
   score: number;
+  albumId: string;
   file: DriveFileInfo;
 };
 
 export type PhotoSearchResponse = {
   query: string;
   topK: number;
+  albumIds: string[];
   results: PhotoSearchResult[];
 };
 
-export async function searchPhotos(
+export function searchPhotos(
   query: string,
-  topK = 60
+  topK = 20,
+  albumIds: string[] = [],
 ): Promise<PhotoSearchResponse> {
-  const params = new URLSearchParams({
-    query,
-    topK: String(topK),
-  });
-
-  const response = await fetch(`/api/search?${params.toString()}`, {
-    credentials: "include",
-  });
-
-  if (!response.ok) {
-    throw new Error(`Search failed: ${response.status} ${response.statusText}`);
-  }
-
-  return response.json();
+  const params = new URLSearchParams({ query, topK: String(topK) });
+  albumIds.forEach((albumId) => params.append("albumIds", albumId));
+  return fetchJson<PhotoSearchResponse>(`/api/search?${params.toString()}`);
 }

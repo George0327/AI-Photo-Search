@@ -9,32 +9,18 @@ export type DriveFileInfo = {
   folder: boolean;
 };
 
+import { fetchJson } from "./apiClient";
+
 const DRIVE_API_BASE = "/api/drive";
-
-async function fetchJson<T>(url: string): Promise<T> {
-  const response = await fetch(url, {
-    credentials: "include",
-  });
-
-  if (!response.ok) {
-    throw new Error(`Request failed: ${response.status} ${response.statusText}`);
-  }
-
-  const contentType = response.headers.get("content-type");
-
-  if (!contentType || !contentType.includes("application/json")) {
-    throw new Error("Backend did not return JSON. You may need to log in first.");
-  }
-
-  return response.json();
-}
 
 export function fetchAlbums(): Promise<DriveFileInfo[]> {
   return fetchJson<DriveFileInfo[]>(`${DRIVE_API_BASE}/albums`);
 }
 
 export function fetchImages(albumId: string): Promise<DriveFileInfo[]> {
-  return fetchJson<DriveFileInfo[]>(`${DRIVE_API_BASE}/albums/${albumId}/images`);
+  return fetchJson<DriveFileInfo[]>(
+    `${DRIVE_API_BASE}/albums/${albumId}/images`,
+  );
 }
 
 export function getImageContentUrl(fileId: string): string {

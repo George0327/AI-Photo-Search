@@ -5,54 +5,81 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.Instant;
+
 @Entity
-@Table(name = "sync_runs")
+@Table(
+        name = "sync_runs",
+        indexes = {
+                @Index(name = "idx_sync_runs_status", columnList = "status"),
+                @Index(name = "idx_sync_runs_type", columnList = "type"),
+                @Index(name = "idx_sync_runs_started_at", columnList = "started_at")
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class SyncRun {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    @Column(nullable = false, length = 40)
+    private SyncType type;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 30)
     @Builder.Default
     private SyncStatus status = SyncStatus.RUNNING;
 
-    @Column(nullable = false, updatable = false)
-    private Instant startedAt;
+    @Column(name = "target_album_drive_id", length = 255)
+    private String targetAlbumDriveId;
 
-    private Instant finishedAt;
+    @Column(name = "target_album_title", length = 500)
+    private String targetAlbumTitle;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "started_by_user_id")
     @ToString.Exclude
     private User startedBy;
 
-    @Column(nullable = false)
-    @Builder.Default
-    private Integer newItemsCount = 0;
+    @Column(name = "started_at", nullable = false)
+    private Instant startedAt;
+
+    private Instant finishedAt;
 
     @Column(nullable = false)
     @Builder.Default
-    private Integer updatedItemsCount = 0;
+    private int albumsScanned = 0;
 
     @Column(nullable = false)
     @Builder.Default
-    private Integer deletedItemsCount = 0;
+    private int mediaSeen = 0;
 
     @Column(nullable = false)
     @Builder.Default
-    private Integer indexedItemsCount = 0;
+    private int mediaCreated = 0;
 
     @Column(nullable = false)
     @Builder.Default
-    private Integer failedItemsCount = 0;
+    private int mediaUpdated = 0;
 
-    @Column(columnDefinition = "TEXT")
+    @Column(nullable = false)
+    @Builder.Default
+    private int mediaMarkedDeleted = 0;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private int mediaIndexed = 0;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private int mediaFailed = 0;
+
+    @Column(length = 4000)
     private String errorMessage;
 
     @Column(nullable = false, updatable = false)
@@ -64,7 +91,11 @@ public class SyncRun {
     @PrePersist
     protected void onCreate() {
         Instant now = Instant.now();
-        this.startedAt = this.startedAt == null ? now : this.startedAt;
+
+        if (this.startedAt == null) {
+            this.startedAt = now;
+        }
+
         this.createdAt = now;
         this.updatedAt = now;
     }
@@ -72,5 +103,22 @@ public class SyncRun {
     @PreUpdate
     protected void onUpdate() {
         this.updatedAt = Instant.now();
+    }
+
+    public void markSuccess() {
+        this.status = SyncStatus.SUCCESS;
+        this.finishedAt = Instant.now();
+    }
+
+    public void markPartial(String errorMessage) {
+        this.status = SyncStatus.PARTIAL;
+        this.errorMessage = errorMessage;
+        this.finishedAt = Instant.now();
+    }
+
+    public void markFailed(String errorMessage) {
+        this.status = SyncStatus.FAILED;
+        this.errorMessage = errorMessage;
+        this.finishedAt = Instant.now();
     }
 }

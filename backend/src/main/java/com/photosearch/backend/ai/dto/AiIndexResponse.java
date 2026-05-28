@@ -1,4 +1,4 @@
-package com.photosearch.backend.ai;
+package com.photosearch.backend.ai.dto;
 
 public record AiIndexResponse(
         boolean success,

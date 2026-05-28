@@ -1,82 +1,40 @@
-import { useEffect, useState } from "react";
 import {
   Alert,
-  Badge,
   Button,
-  Card,
   Center,
   Container,
   Group,
   Loader,
+  Paper,
+  SimpleGrid,
   Stack,
-  Table,
   Text,
   Title,
 } from "@mantine/core";
 import { IconAlertCircle, IconRefresh, IconSparkles } from "@tabler/icons-react";
-
-import type { DriveFileInfo } from "../api/driveApi";
-import { fetchAlbums } from "../api/driveApi";
-import {
-  rebuildAlbumIndex,
-  rebuildFullDriveIndex,
-} from "../api/adminAiApi";
-import type { DriveIndexResult } from "../api/adminAiApi";
+import { useAdminIndexing } from "../hooks/useAdminIndexing";
+import { AlbumIndexTable } from "../components/admin/AlbumIndexTable";
 
 export default function AdminPage() {
-  const [albums, setAlbums] = useState<DriveFileInfo[]>([]);
-  const [albumsLoading, setAlbumsLoading] = useState(false);
-  const [indexingAlbumId, setIndexingAlbumId] = useState<string | null>(null);
-  const [fullIndexing, setFullIndexing] = useState(false);
-  const [result, setResult] = useState<DriveIndexResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    albums,
+    albumsLoading,
+    indexingAlbumId,
+    reindexingAlbumId,
+    indexingAll,
+    anyAlbumBusy,
+    failures,
+    error,
+    loadAlbumStatuses,
+    handleIndexAlbum,
+    handleReindexAlbum,
+    handleIndexAllNewPhotos,
+  } = useAdminIndexing();
 
-  async function loadAlbums() {
-    try {
-      setError(null);
-      setAlbumsLoading(true);
-      const data = await fetchAlbums();
-      setAlbums(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load albums.");
-    } finally {
-      setAlbumsLoading(false);
-    }
-  }
-
-  async function handleIndexAlbum(album: DriveFileInfo) {
-    try {
-      setError(null);
-      setResult(null);
-      setIndexingAlbumId(album.id);
-
-      const data = await rebuildAlbumIndex(album.id);
-      setResult(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to index album.");
-    } finally {
-      setIndexingAlbumId(null);
-    }
-  }
-
-  async function handleRebuildFullIndex() {
-    try {
-      setError(null);
-      setResult(null);
-      setFullIndexing(true);
-
-      const data = await rebuildFullDriveIndex();
-      setResult(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to rebuild full index.");
-    } finally {
-      setFullIndexing(false);
-    }
-  }
-
-  useEffect(() => {
-    loadAlbums();
-  }, []);
+  const totalActive = albums.reduce((s, a) => s + a.totalActiveImages, 0);
+  const totalIndexed = albums.reduce((s, a) => s + a.indexedImages, 0);
+  const totalPending = albums.reduce((s, a) => s + a.needsIndexImages, 0);
+  const totalDeleted = albums.reduce((s, a) => s + a.deletedImages, 0);
 
   return (
     <Container size="xl" py="md">
@@ -93,27 +51,55 @@ export default function AdminPage() {
             <Button
               variant="light"
               leftSection={<IconRefresh size={16} />}
-              onClick={loadAlbums}
+              onClick={loadAlbumStatuses}
               loading={albumsLoading}
+              disabled={anyAlbumBusy}
             >
-              Refresh albums
+              Refresh statuses
             </Button>
 
             <Button
               leftSection={<IconSparkles size={16} />}
-              onClick={handleRebuildFullIndex}
-              loading={fullIndexing}
-              color="red"
+              onClick={handleIndexAllNewPhotos}
+              loading={indexingAll}
+              disabled={indexingAlbumId !== null || reindexingAlbumId !== null}
             >
-              Rebuild full index
+              Index all new photos
             </Button>
           </Group>
         </Group>
 
-        <Alert color="yellow" title="Indexing behavior">
-          Indexing an album currently resets the FAISS index first. That means the
-          searchable photos become the photos from the last indexed album, unless
-          you rebuild the full Drive index.
+        {albums.length > 0 && (
+          <SimpleGrid cols={{ base: 2, sm: 4 }}>
+            {[
+              { label: "Albums", value: albums.length, color: "brand" },
+              { label: "Total photos", value: totalActive, color: "gray" },
+              { label: "Indexed", value: totalIndexed, color: "green" },
+              {
+                label: "Pending",
+                value: totalPending,
+                color: totalPending > 0 ? "yellow" : "gray",
+              },
+              ...(totalDeleted > 0
+                ? [{ label: "Deleted", value: totalDeleted, color: "red" }]
+                : []),
+            ].map(({ label, value, color }) => (
+              <Paper key={label} withBorder radius="md" p="md">
+                <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb={4}>
+                  {label}
+                </Text>
+                <Text size="xl" fw={700} c={color}>
+                  {value}
+                </Text>
+              </Paper>
+            ))}
+          </SimpleGrid>
+        )}
+
+        <Alert color="blue" title="Indexing behavior">
+          New or failed photos can be indexed incrementally. If an album has
+          deleted photos, reindex the whole album to clean that album&apos;s AI
+          index folder.
         </Alert>
 
         {error && (
@@ -122,95 +108,33 @@ export default function AdminPage() {
           </Alert>
         )}
 
+        {failures.length > 0 && (
+          <Stack gap="xs">
+            <Text fw={500}>Indexing failures</Text>
+            {failures.map((failure) => (
+              <Alert key={failure.fileId} color="red">
+                <Text size="sm" fw={500}>
+                  {failure.fileName}
+                </Text>
+                <Text size="xs">{failure.error}</Text>
+              </Alert>
+            ))}
+          </Stack>
+        )}
+
         {albumsLoading ? (
           <Center py={80}>
             <Loader />
           </Center>
         ) : (
-          <Card withBorder radius="md">
-            <Group justify="space-between" mb="md">
-              <Title order={4}>Albums</Title>
-              <Badge variant="light">{albums.length}</Badge>
-            </Group>
-
-            <Table.ScrollContainer minWidth={700}>
-              <Table verticalSpacing="sm">
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th>Album</Table.Th>
-                    <Table.Th>Drive folder ID</Table.Th>
-                    <Table.Th>Action</Table.Th>
-                  </Table.Tr>
-                </Table.Thead>
-
-                <Table.Tbody>
-                  {albums.map((album) => (
-                    <Table.Tr key={album.id}>
-                      <Table.Td>
-                        <Text fw={500}>{album.name}</Text>
-                      </Table.Td>
-
-                      <Table.Td>
-                        <Text size="xs" c="dimmed">
-                          {album.id}
-                        </Text>
-                      </Table.Td>
-
-                      <Table.Td>
-                        <Button
-                          size="xs"
-                          leftSection={<IconSparkles size={14} />}
-                          onClick={() => handleIndexAlbum(album)}
-                          loading={indexingAlbumId === album.id}
-                          disabled={fullIndexing || indexingAlbumId !== null}
-                        >
-                          Index album
-                        </Button>
-                      </Table.Td>
-                    </Table.Tr>
-                  ))}
-                </Table.Tbody>
-              </Table>
-            </Table.ScrollContainer>
-
-            {albums.length === 0 && (
-              <Text size="sm" c="dimmed" mt="md">
-                No albums found.
-              </Text>
-            )}
-          </Card>
-        )}
-
-        {result && (
-          <Card withBorder radius="md">
-            <Title order={4} mb="sm">
-              Last indexing result
-            </Title>
-
-            <Group>
-              <Badge>Albums: {result.albumCount}</Badge>
-              <Badge>Total images: {result.totalImages}</Badge>
-              <Badge color="green">Indexed: {result.indexedCount}</Badge>
-              <Badge color={result.failedCount > 0 ? "red" : "gray"}>
-                Failed: {result.failedCount}
-              </Badge>
-            </Group>
-
-            {result.failures.length > 0 && (
-              <Stack mt="md" gap="xs">
-                <Text fw={500}>Failures</Text>
-
-                {result.failures.map((failure) => (
-                  <Alert key={failure.fileId} color="red">
-                    <Text size="sm" fw={500}>
-                      {failure.fileName}
-                    </Text>
-                    <Text size="xs">{failure.error}</Text>
-                  </Alert>
-                ))}
-              </Stack>
-            )}
-          </Card>
+          <AlbumIndexTable
+            albums={albums}
+            indexingAlbumId={indexingAlbumId}
+            reindexingAlbumId={reindexingAlbumId}
+            anyBusy={anyAlbumBusy}
+            onIndexAlbum={handleIndexAlbum}
+            onReindexAlbum={handleReindexAlbum}
+          />
         )}
       </Stack>
     </Container>

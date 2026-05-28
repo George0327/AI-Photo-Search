@@ -1,4 +1,4 @@
-package com.photosearch.backend.ai;
+package com.photosearch.backend.ai.client;
 
 import lombok.Getter;
 import lombok.Setter;

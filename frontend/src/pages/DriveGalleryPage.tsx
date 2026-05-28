@@ -1,59 +1,53 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  ActionIcon,
   Alert,
-  AppShell,
-  Badge,
+  Box,
   Button,
-  Card,
-  Center,
+  Container,
+  Drawer,
+  Flex,
   Group,
-  Image,
-  Loader,
-  Modal,
-  Pagination,
-  ScrollArea,
-  Select,
-  SimpleGrid,
+  Paper,
   Stack,
   Text,
-  TextInput,
   Title,
 } from "@mantine/core";
 import {
   IconAlertCircle,
-  IconDownload,
-  IconPhoto,
+  IconMenu2,
   IconRefresh,
-  IconSearch,
-  IconX,
 } from "@tabler/icons-react";
 
 import type { DriveFileInfo } from "../api/driveApi";
-import {
-  fetchAlbums,
-  fetchImages,
-  getImageContentUrl,
-  getImageDownloadUrl,
-  getImageThumbnailUrl,
-} from "../api/driveApi";
-
+import { fetchAlbums, fetchImages } from "../api/driveApi";
 import { searchPhotos } from "../api/searchApi";
 import type { PhotoSearchResult } from "../api/searchApi";
+
+import { AlbumSidebar } from "../components/AlbumSidebar";
+import { SearchBar } from "../components/SearchBar";
+import { PhotoGrid } from "../components/PhotoGrid";
+import { PhotoPreviewModal } from "../components/PhotoPreviewModal";
 
 const PHOTOS_PER_PAGE = 20;
 
 export default function DriveGalleryPage() {
   const [albums, setAlbums] = useState<DriveFileInfo[]>([]);
   const [selectedAlbum, setSelectedAlbum] = useState<DriveFileInfo | null>(null);
+  const [selectedSearchAlbumIds, setSelectedSearchAlbumIds] = useState<string[]>([]);
+
   const [images, setImages] = useState<DriveFileInfo[]>([]);
   const [previewImage, setPreviewImage] = useState<DriveFileInfo | null>(null);
 
   const [activePage, setActivePage] = useState(1);
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [topK, setTopK] = useState("10");
+  const [lastSearchQuery, setLastSearchQuery] = useState("");
+  const [topK, setTopK] = useState("20");
   const [searchResults, setSearchResults] = useState<PhotoSearchResult[]>([]);
   const [searchMode, setSearchMode] = useState(false);
+
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   const [albumsLoading, setAlbumsLoading] = useState(false);
   const [imagesLoading, setImagesLoading] = useState(false);
@@ -61,43 +55,34 @@ export default function DriveGalleryPage() {
   const [error, setError] = useState<string | null>(null);
 
   const visibleImages = useMemo(() => {
-    if (searchMode) {
-      return searchResults.map((result) => result.file);
-    }
-
+    if (searchMode) return searchResults.map((r) => r.file);
     return images;
   }, [searchMode, searchResults, images]);
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(visibleImages.length / PHOTOS_PER_PAGE)
-  );
+  const searchScores = useMemo(() => {
+    if (!searchMode) return undefined;
+    return Object.fromEntries(searchResults.map((r) => [r.file.id, r.score]));
+  }, [searchMode, searchResults]);
+
+  const totalPages = Math.max(1, Math.ceil(visibleImages.length / PHOTOS_PER_PAGE));
 
   const paginatedImages = useMemo(() => {
-    const startIndex = (activePage - 1) * PHOTOS_PER_PAGE;
-    const endIndex = startIndex + PHOTOS_PER_PAGE;
-
-    return visibleImages.slice(startIndex, endIndex);
+    const start = (activePage - 1) * PHOTOS_PER_PAGE;
+    return visibleImages.slice(start, start + PHOTOS_PER_PAGE);
   }, [visibleImages, activePage]);
 
-  const firstVisibleNumber =
-    visibleImages.length === 0 ? 0 : (activePage - 1) * PHOTOS_PER_PAGE + 1;
-
-  const lastVisibleNumber = Math.min(
-    activePage * PHOTOS_PER_PAGE,
-    visibleImages.length
-  );
+  const firstVisible = visibleImages.length === 0 ? 0 : (activePage - 1) * PHOTOS_PER_PAGE + 1;
+  const lastVisible = Math.min(activePage * PHOTOS_PER_PAGE, visibleImages.length);
 
   async function loadAlbums() {
     try {
       setError(null);
       setAlbumsLoading(true);
-
       const data = await fetchAlbums();
       setAlbums(data);
-
       if (!selectedAlbum && data.length > 0) {
         setSelectedAlbum(data[0]);
+        setSelectedSearchAlbumIds([data[0].id]);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load albums.");
@@ -111,7 +96,6 @@ export default function DriveGalleryPage() {
       setError(null);
       setImagesLoading(true);
       setActivePage(1);
-
       const data = await fetchImages(albumId);
       setImages(data);
     } catch (err) {
@@ -122,20 +106,20 @@ export default function DriveGalleryPage() {
   }
 
   async function handleSearch() {
-    const trimmedQuery = searchQuery.trim();
-
-    if (!trimmedQuery) {
+    const trimmed = searchQuery.trim();
+    if (!trimmed) return;
+    if (selectedSearchAlbumIds.length === 0) {
+      setError("Select at least one album to search.");
       return;
     }
-
     try {
       setError(null);
       setSearchLoading(true);
       setActivePage(1);
-
-      const data = await searchPhotos(trimmedQuery, Number(topK));
+      const data = await searchPhotos(trimmed, Number(topK), selectedSearchAlbumIds);
       setSearchResults(data.results);
       setSearchMode(true);
+      setLastSearchQuery(trimmed);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Search failed.");
     } finally {
@@ -147,6 +131,7 @@ export default function DriveGalleryPage() {
     setSearchMode(false);
     setSearchResults([]);
     setSearchQuery("");
+    setLastSearchQuery("");
     setActivePage(1);
   }
 
@@ -161,279 +146,129 @@ export default function DriveGalleryPage() {
     }
   }, [selectedAlbum]);
 
+  const albumSidebarProps = {
+    albums,
+    albumsLoading,
+    selectedAlbum,
+    selectedSearchAlbumIds,
+    onSelectAlbum: (album: DriveFileInfo) => {
+      clearSearch();
+      setSelectedAlbum(album);
+      setMobileSidebarOpen(false);
+    },
+    onSearchAlbumToggle: (albumId: string, checked: boolean) =>
+      setSelectedSearchAlbumIds((curr) =>
+        checked ? [...curr, albumId] : curr.filter((id) => id !== albumId),
+      ),
+    onSelectAllForSearch: () =>
+      setSelectedSearchAlbumIds(albums.map((a) => a.id)),
+    onClearSearchSelection: () => setSelectedSearchAlbumIds([]),
+  };
+
   return (
     <>
-      <AppShell
-        header={{ height: 56 }}
-        navbar={{ width: 300, breakpoint: "sm" }}
-        padding="md"
-      >
-        <AppShell.Navbar p="md">
-          <Group justify="space-between" mb="md">
-            <Title order={4}>Albums</Title>
-            <Badge variant="light">{albums.length}</Badge>
-          </Group>
+      <Container fluid py="lg" px="xl">
+        {error && (
+          <Alert
+            color="red"
+            title="Error"
+            icon={<IconAlertCircle size={18} />}
+            radius="md"
+            mb="lg"
+          >
+            {error}
+          </Alert>
+        )}
 
-          {albumsLoading ? (
-            <Center py="xl">
-              <Loader />
-            </Center>
-          ) : (
-            <ScrollArea>
-              <Stack gap="xs">
-                {albums.map((album) => (
-                  <Button
-                    key={album.id}
-                    variant={
-                      selectedAlbum?.id === album.id ? "filled" : "subtle"
-                    }
-                    justify="flex-start"
-                    leftSection={<IconPhoto size={16} />}
-                    onClick={() => {
-                      clearSearch();
-                      setSelectedAlbum(album);
-                    }}
-                  >
-                    {album.name}
-                  </Button>
-                ))}
+        <Flex gap="lg" align="flex-start">
+          <Box w={300} visibleFrom="md" style={{ position: "sticky", top: 80 }}>
+            <AlbumSidebar {...albumSidebarProps} />
+          </Box>
 
-                {albums.length === 0 && (
-                  <Text size="sm" c="dimmed">
-                    No albums found.
-                  </Text>
-                )}
-              </Stack>
-            </ScrollArea>
-          )}
-        </AppShell.Navbar>
-
-        <AppShell.Main>
-          <Stack>
-            <Group justify="space-between">
-              <div>
-                <Title order={2}>Gallery</Title>
-                <Text size="sm" c="dimmed">
-                  Browse Google Drive albums and search indexed photos.
-                </Text>
-              </div>
-
-              <Button
-                leftSection={<IconRefresh size={16} />}
-                variant="light"
-                onClick={loadAlbums}
-                loading={albumsLoading}
-              >
-                Refresh albums
-              </Button>
-            </Group>
-            {error && (
-              <Alert
-                color="red"
-                title="Error"
-                icon={<IconAlertCircle size={18} />}
-              >
-                {error}
-              </Alert>
-            )}
-
-            <Group justify="space-between" align="flex-start">
-              <div>
-                <Title order={2}>
-                  {searchMode
-                    ? `Search results for "${searchQuery}"`
-                    : selectedAlbum
-                      ? selectedAlbum.name
-                      : "Select an album"}
-                </Title>
-
-                <Text size="sm" c="dimmed">
-                  {searchMode
-                    ? `${searchResults.length} indexed result${
-                        searchResults.length === 1 ? "" : "s"
-                      }`
-                    : `${images.length} image${
-                        images.length === 1 ? "" : "s"
-                      }${
-                        images.length > PHOTOS_PER_PAGE
-                          ? ` · ${PHOTOS_PER_PAGE} per page`
-                          : ""
-                      }`}
-                </Text>
-              </div>
-
-              {selectedAlbum && !searchMode && (
-                <Button
-                  leftSection={<IconRefresh size={16} />}
-                  variant="light"
-                  onClick={() => loadImages(selectedAlbum.id)}
-                  loading={imagesLoading}
-                >
-                  Refresh photos
-                </Button>
-              )}
-            </Group>
-
-            <Stack gap="xs">
-              <Group align="end">
-                <TextInput
-                  label="Search indexed photos"
-                  placeholder='Example: "dog", "mountain", "people at a table"'
-                  value={searchQuery}
-                  onChange={(event) =>
-                    setSearchQuery(event.currentTarget.value)
-                  }
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      handleSearch();
-                    }
-                  }}
-                  style={{ flex: 1 }}
-                />
-
-                <Select
-                  label="Results"
-                  value={topK}
-                  onChange={(value) => setTopK(value ?? "10")}
-                  data={[
-                    { value: "5", label: "Top 5" },
-                    { value: "10", label: "Top 10" },
-                    { value: "20", label: "Top 20" },
-                    { value: "30", label: "Top 30" },
-                    { value: "50", label: "Top 50" },
-                    { value: "100", label: "Top 100" },
-                  ]}
-                  w={110}
-                />
-
-                <Button
-                  leftSection={<IconSearch size={16} />}
-                  onClick={handleSearch}
-                  loading={searchLoading}
-                >
-                  Search
-                </Button>
-
-                {searchMode && (
-                  <Button
-                    variant="light"
-                    leftSection={<IconX size={16} />}
-                    onClick={clearSearch}
-                  >
-                    Clear
-                  </Button>
-                )}
-              </Group>
-
-              <Text size="xs" c="dimmed">
-                Search only returns photos that were indexed by an admin.
-              </Text>
-            </Stack>
-
-            {imagesLoading || searchLoading ? (
-              <Center py={80}>
-                <Loader />
-              </Center>
-            ) : (
-              <>
-                <SimpleGrid
-                  cols={{ base: 1, sm: 2, md: 3, lg: 4 }}
-                  spacing="md"
-                >
-                  {paginatedImages.map((image) => (
-                    <Card
-                      key={image.id}
-                      shadow="sm"
-                      padding="sm"
-                      radius="md"
-                      withBorder
-                      style={{ cursor: "pointer" }}
-                      onClick={() => setPreviewImage(image)}
+          <Stack style={{ flex: 1, minWidth: 0 }}>
+            <Paper withBorder radius="md" p="lg">
+              <Stack gap="md">
+                <Group justify="space-between">
+                  <Group>
+                    <ActionIcon
+                      hiddenFrom="md"
+                      variant="default"
+                      size="lg"
+                      aria-label="Open albums menu"
+                      onClick={() => setMobileSidebarOpen(true)}
                     >
-                      <Card.Section>
-                        <Image
-                          src={getImageThumbnailUrl(image.id)}
-                          alt={image.name}
-                          h={220}
-                          fit="cover"
-                          loading="lazy"
-                        />
-                      </Card.Section>
-
-                      <Text size="sm" mt="sm" fw={500} truncate="end">
-                        {image.name}
+                      <IconMenu2 size={18} />
+                    </ActionIcon>
+                    <div>
+                      <Title order={3}>
+                        {searchMode
+                          ? `Results for "${lastSearchQuery}"`
+                          : selectedAlbum?.name || "Select an album"}
+                      </Title>
+                      <Text size="sm" c="dimmed">
+                        {searchMode
+                          ? `${searchResults.length} indexed photos found`
+                          : `${images.length} photos in gallery`}
                       </Text>
-
-                      <Text size="xs" c="dimmed">
-                        {image.mimeType}
-                      </Text>
-                    </Card>
-                  ))}
-                </SimpleGrid>
-
-                {visibleImages.length > PHOTOS_PER_PAGE && (
-                  <Group justify="space-between" mt="md">
-                    <Text size="sm" c="dimmed">
-                      Showing {firstVisibleNumber}–{lastVisibleNumber} of{" "}
-                      {visibleImages.length}{" "}
-                      {searchMode ? "results" : "photos"}
-                    </Text>
-
-                    <Pagination
-                      total={totalPages}
-                      value={activePage}
-                      onChange={setActivePage}
-                      siblings={1}
-                      boundaries={1}
-                    />
+                    </div>
                   </Group>
-                )}
-              </>
-            )}
+                  {selectedAlbum && !searchMode && (
+                    <Button
+                      variant="light"
+                      size="sm"
+                      leftSection={<IconRefresh size={16} />}
+                      onClick={() => loadImages(selectedAlbum.id)}
+                      loading={imagesLoading}
+                    >
+                      Refresh
+                    </Button>
+                  )}
+                </Group>
 
-            {!imagesLoading && !searchLoading && visibleImages.length === 0 && (
-              <Center py={80}>
-                <Text c="dimmed">
-                  {searchMode
-                    ? "No indexed photos matched this search."
-                    : "No images found in this album."}
-                </Text>
-              </Center>
-            )}
-          </Stack>
-        </AppShell.Main>
-      </AppShell>
+                <SearchBar
+                  value={searchQuery}
+                  topK={topK}
+                  loading={searchLoading}
+                  searchMode={searchMode}
+                  onChange={setSearchQuery}
+                  onTopKChange={setTopK}
+                  onSearch={handleSearch}
+                  onClear={clearSearch}
+                />
+              </Stack>
+            </Paper>
 
-      <Modal
-        opened={previewImage !== null}
-        onClose={() => setPreviewImage(null)}
-        title={previewImage?.name}
-        size="xl"
-        centered
-        transitionProps={{ duration: 100 }}
-      >
-        {previewImage && (
-          <Stack>
-            <Group justify="flex-end">
-              <Button
-                component="a"
-                href={getImageDownloadUrl(previewImage.id)}
-                download={previewImage.name}
-                leftSection={<IconDownload size={16} />}
-              >
-                Download
-              </Button>
-            </Group>
-
-            <Image
-              src={getImageContentUrl(previewImage.id)}
-              alt={previewImage.name}
-              fit="contain"
-              mah="75vh"
+            <PhotoGrid
+              images={paginatedImages}
+              loading={imagesLoading || searchLoading}
+              searchMode={searchMode}
+              activePage={activePage}
+              totalPages={totalPages}
+              totalCount={visibleImages.length}
+              firstVisible={firstVisible}
+              lastVisible={lastVisible}
+              scores={searchScores}
+              onPageChange={setActivePage}
+              onImageClick={setPreviewImage}
             />
           </Stack>
-        )}
-      </Modal>
+        </Flex>
+      </Container>
+
+      <Drawer
+        opened={mobileSidebarOpen}
+        onClose={() => setMobileSidebarOpen(false)}
+        title="Gallery Albums"
+        padding="md"
+        size="sm"
+      >
+        <AlbumSidebar {...albumSidebarProps} />
+      </Drawer>
+
+      <PhotoPreviewModal
+        image={previewImage}
+        onClose={() => setPreviewImage(null)}
+      />
     </>
   );
 }

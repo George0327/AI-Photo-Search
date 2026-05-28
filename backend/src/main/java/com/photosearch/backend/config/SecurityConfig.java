@@ -2,6 +2,7 @@ package com.photosearch.backend.config;
 
 import com.photosearch.backend.auth.CustomOAuth2UserService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
@@ -16,6 +17,9 @@ import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 public class SecurityConfig {
 
     private final CustomOAuth2UserService customOAuth2UserService;
+
+    @Value("${app.security.frontend-url}")
+    private String frontendUrl;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -48,12 +52,12 @@ public class SecurityConfig {
                         .userInfoEndpoint(userInfo -> userInfo
                                 .oidcUserService(customOAuth2UserService)
                         )
-                        .defaultSuccessUrl("http://localhost:5173", true)
+                        .defaultSuccessUrl(frontendUrl, true)
                 )
 
                 .logout(logout -> logout
                         .logoutUrl("/api/auth/logout")
-                        .logoutSuccessUrl("http://localhost:5173")
+                        .logoutSuccessUrl(frontendUrl)
                         .invalidateHttpSession(true)
                         .deleteCookies("JSESSIONID")
                 );

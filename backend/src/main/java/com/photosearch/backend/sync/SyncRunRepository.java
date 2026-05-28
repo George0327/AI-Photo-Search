@@ -5,6 +5,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 
 public interface SyncRunRepository extends JpaRepository<SyncRun, Long> {
-    List<SyncRun> findAllByOrderByStartedAtDesc();
-    List<SyncRun> findByStatusOrderByStartedAtDesc(SyncStatus status);
+
+    List<SyncRun> findTop20ByOrderByStartedAtDesc();
+
+    List<SyncRun> findTop20ByTypeOrderByStartedAtDesc(SyncType type);
+
+    List<SyncRun> findByStatus(SyncStatus status);
 }

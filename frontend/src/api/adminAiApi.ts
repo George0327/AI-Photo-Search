@@ -1,3 +1,16 @@
+import { fetchJson, postJson } from "./apiClient";
+
+export type AlbumIndexStatus = {
+  albumDatabaseId: number;
+  driveAlbumId: string;
+  title: string;
+  totalActiveImages: number;
+  indexedImages: number;
+  needsIndexImages: number;
+  deletedImages: number;
+  reindexRecommended: boolean;
+};
+
 export type DriveIndexFailure = {
   fileId: string;
   fileName: string;
@@ -6,36 +19,27 @@ export type DriveIndexFailure = {
 
 export type DriveIndexResult = {
   albumCount: number;
-  totalImages: number;
-  indexedCount: number;
+  totalActiveImages: number;
+  indexedImages: number;
+  needsIndexImages: number;
+  deletedImages: number;
+  newlyIndexedCount: number;
   failedCount: number;
   failures: DriveIndexFailure[];
 };
 
-export async function rebuildAlbumIndex(
-  albumId: string
-): Promise<DriveIndexResult> {
-  const response = await fetch(`/api/admin/ai/rebuild-album/${albumId}`, {
-    method: "POST",
-    credentials: "include",
-  });
-
-  if (!response.ok) {
-    throw new Error(`Album indexing failed: ${response.status} ${response.statusText}`);
-  }
-
-  return response.json();
+export function fetchAlbumIndexStatuses(): Promise<AlbumIndexStatus[]> {
+  return fetchJson<AlbumIndexStatus[]>("/api/admin/ai/albums/status");
 }
 
-export async function rebuildFullDriveIndex(): Promise<DriveIndexResult> {
-  const response = await fetch("/api/admin/ai/rebuild-drive", {
-    method: "POST",
-    credentials: "include",
-  });
+export function indexAlbum(albumId: string): Promise<DriveIndexResult> {
+  return postJson<DriveIndexResult>(`/api/admin/ai/index-album/${albumId}`);
+}
 
-  if (!response.ok) {
-    throw new Error(`Drive indexing failed: ${response.status} ${response.statusText}`);
-  }
+export function reindexAlbum(albumId: string): Promise<DriveIndexResult> {
+  return postJson<DriveIndexResult>(`/api/admin/ai/reindex-album/${albumId}`);
+}
 
-  return response.json();
+export function indexAllNewPhotos(): Promise<DriveIndexResult> {
+  return postJson<DriveIndexResult>("/api/admin/ai/index-all");
 }

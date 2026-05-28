@@ -6,28 +6,41 @@ import lombok.*;
 import java.time.Instant;
 
 @Entity
-@Table(name = "albums")
+@Table(
+        name = "albums",
+        indexes = {
+                @Index(name = "idx_albums_drive_folder_id", columnList = "drive_folder_id"),
+                @Index(name = "idx_albums_enabled", columnList = "enabled")
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class Album {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true)
+    @Column(name = "drive_folder_id", nullable = false, unique = true, length = 255)
     private String driveFolderId;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 500)
     private String title;
 
     @Column(nullable = false)
     @Builder.Default
     private boolean enabled = true;
 
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean deletedInDrive = false;
+
     private Instant lastSyncedAt;
+
+    private Instant lastIndexedAt;
 
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
