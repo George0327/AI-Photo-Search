@@ -4,6 +4,8 @@ import {
   fetchAlbumIndexStatuses,
   indexAlbum,
   indexAllNewPhotos,
+  indexFaces,
+  indexLogos,
   reindexAlbum,
 } from "../api/adminAiApi";
 import type { AlbumIndexStatus, DriveIndexFailure, DriveIndexResult } from "../api/adminAiApi";
@@ -15,12 +17,18 @@ export function useAdminIndexing() {
   const [indexingAlbumId, setIndexingAlbumId] = useState<string | null>(null);
   const [reindexingAlbumId, setReindexingAlbumId] = useState<string | null>(null);
   const [indexingAll, setIndexingAll] = useState(false);
+  const [indexingFacesAlbumId, setIndexingFacesAlbumId] = useState<string | null>(null);
+  const [indexingLogosAlbumId, setIndexingLogosAlbumId] = useState<string | null>(null);
 
   const [failures, setFailures] = useState<DriveIndexFailure[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const anyAlbumBusy =
-    indexingAlbumId !== null || reindexingAlbumId !== null || indexingAll;
+    indexingAlbumId !== null ||
+    reindexingAlbumId !== null ||
+    indexingAll ||
+    indexingFacesAlbumId !== null ||
+    indexingLogosAlbumId !== null;
 
   async function loadAlbumStatuses() {
     try {
@@ -29,9 +37,7 @@ export function useAdminIndexing() {
       const data = await fetchAlbumIndexStatuses();
       setAlbums(data);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to load album indexing statuses.",
-      );
+      setError(err instanceof Error ? err.message : "Failed to load album indexing statuses.");
     } finally {
       setAlbumsLoading(false);
     }
@@ -41,15 +47,18 @@ export function useAdminIndexing() {
     startLoading: () => void,
     stopLoading: () => void,
     apiCall: () => Promise<DriveIndexResult>,
+    successTitle = "Success",
+    countLabel = "photo",
   ) {
     setError(null);
     setFailures([]);
     startLoading();
     try {
       const data = await apiCall();
+      const n = data.newlyIndexedCount;
       notifications.show({
-        title: data.failedCount === 0 ? "Success" : "Completed with errors",
-        message: `${data.newlyIndexedCount} photo${data.newlyIndexedCount !== 1 ? "s" : ""} newly indexed.${data.failedCount > 0 ? ` ${data.failedCount} failed.` : ""}`,
+        title: data.failedCount === 0 ? successTitle : "Completed with errors",
+        message: `${n} ${countLabel}${n !== 1 ? "s" : ""} indexed.${data.failedCount > 0 ? ` ${data.failedCount} failed.` : ""}`,
         color: data.failedCount === 0 ? "green" : "yellow",
         autoClose: 5000,
       });
@@ -86,6 +95,26 @@ export function useAdminIndexing() {
     );
   }
 
+  function handleIndexFaces(album: AlbumIndexStatus) {
+    return runOperation(
+      () => setIndexingFacesAlbumId(album.driveAlbumId),
+      () => setIndexingFacesAlbumId(null),
+      () => indexFaces(album.driveAlbumId),
+      "Faces indexed",
+      "face",
+    );
+  }
+
+  function handleIndexLogos(album: AlbumIndexStatus) {
+    return runOperation(
+      () => setIndexingLogosAlbumId(album.driveAlbumId),
+      () => setIndexingLogosAlbumId(null),
+      () => indexLogos(album.driveAlbumId),
+      "Logos indexed",
+      "logo region",
+    );
+  }
+
   useEffect(() => {
     loadAlbumStatuses();
   }, []);
@@ -96,6 +125,8 @@ export function useAdminIndexing() {
     indexingAlbumId,
     reindexingAlbumId,
     indexingAll,
+    indexingFacesAlbumId,
+    indexingLogosAlbumId,
     anyAlbumBusy,
     failures,
     error,
@@ -103,5 +134,7 @@ export function useAdminIndexing() {
     handleIndexAlbum,
     handleReindexAlbum,
     handleIndexAllNewPhotos,
+    handleIndexFaces,
+    handleIndexLogos,
   };
 }

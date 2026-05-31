@@ -13,23 +13,29 @@ import {
   Text,
   Title,
 } from "@mantine/core";
-import {
-  IconAlertCircle,
-  IconMenu2,
-  IconRefresh,
-} from "@tabler/icons-react";
+import { IconAlertCircle, IconMenu2, IconRefresh } from "@tabler/icons-react";
 
 import type { DriveFileInfo } from "../api/driveApi";
 import { fetchAlbums, fetchImages } from "../api/driveApi";
 import { searchPhotos } from "../api/searchApi";
-import type { PhotoSearchResult } from "../api/searchApi";
+import { searchByFace } from "../api/faceSearchApi";
+import { searchByLogo } from "../api/logoSearchApi";
 
 import { AlbumSidebar } from "../components/AlbumSidebar";
 import { SearchBar } from "../components/SearchBar";
+import type { SearchMode } from "../components/SearchBar";
 import { PhotoGrid } from "../components/PhotoGrid";
 import { PhotoPreviewModal } from "../components/PhotoPreviewModal";
 
 const PHOTOS_PER_PAGE = 20;
+
+type SearchResult = { score: number; albumId: string; file: DriveFileInfo };
+
+const SEARCH_LABELS: Record<SearchMode, string> = {
+  text: "AI search results",
+  face: "Face search results",
+  logo: "Logo search results",
+};
 
 export default function DriveGalleryPage() {
   const [albums, setAlbums] = useState<DriveFileInfo[]>([]);
@@ -41,11 +47,16 @@ export default function DriveGalleryPage() {
 
   const [activePage, setActivePage] = useState(1);
 
+  // Input state
+  const [inputMode, setInputMode] = useState<SearchMode>("text");
   const [searchQuery, setSearchQuery] = useState("");
+  const [topK, setTopK] = useState("10");
+  const [referenceFiles, setReferenceFiles] = useState<File[]>([]);
+
+  // Active search results
+  const [activeSearchType, setActiveSearchType] = useState<SearchMode | null>(null);
   const [lastSearchQuery, setLastSearchQuery] = useState("");
-  const [topK, setTopK] = useState("20");
-  const [searchResults, setSearchResults] = useState<PhotoSearchResult[]>([]);
-  const [searchMode, setSearchMode] = useState(false);
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
 
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
@@ -54,15 +65,17 @@ export default function DriveGalleryPage() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const isSearchActive = activeSearchType !== null;
+
   const visibleImages = useMemo(() => {
-    if (searchMode) return searchResults.map((r) => r.file);
+    if (isSearchActive) return searchResults.map((r) => r.file);
     return images;
-  }, [searchMode, searchResults, images]);
+  }, [isSearchActive, searchResults, images]);
 
   const searchScores = useMemo(() => {
-    if (!searchMode) return undefined;
+    if (!isSearchActive) return undefined;
     return Object.fromEntries(searchResults.map((r) => [r.file.id, r.score]));
-  }, [searchMode, searchResults]);
+  }, [isSearchActive, searchResults]);
 
   const totalPages = Math.max(1, Math.ceil(visibleImages.length / PHOTOS_PER_PAGE));
 
@@ -106,20 +119,51 @@ export default function DriveGalleryPage() {
   }
 
   async function handleSearch() {
-    const trimmed = searchQuery.trim();
-    if (!trimmed) return;
     if (selectedSearchAlbumIds.length === 0) {
       setError("Select at least one album to search.");
       return;
     }
+
+    if (inputMode === "text") {
+      const trimmed = searchQuery.trim();
+      if (!trimmed) return;
+      try {
+        setError(null);
+        setSearchLoading(true);
+        setActivePage(1);
+        const data = await searchPhotos(trimmed, Number(topK), selectedSearchAlbumIds);
+        setSearchResults(data.results);
+        setActiveSearchType("text");
+        setLastSearchQuery(trimmed);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Search failed.");
+      } finally {
+        setSearchLoading(false);
+      }
+      return;
+    }
+
+    if (referenceFiles.length === 0) {
+      setError("Upload at least one reference photo first.");
+      return;
+    }
+
     try {
       setError(null);
       setSearchLoading(true);
       setActivePage(1);
-      const data = await searchPhotos(trimmed, Number(topK), selectedSearchAlbumIds);
-      setSearchResults(data.results);
-      setSearchMode(true);
-      setLastSearchQuery(trimmed);
+
+      if (inputMode === "face") {
+        const data = await searchByFace(referenceFiles, selectedSearchAlbumIds, Number(topK));
+        setSearchResults(data.results);
+        setActiveSearchType("face");
+        setLastSearchQuery(`${referenceFiles.length} reference photo${referenceFiles.length > 1 ? "s" : ""}`);
+      } else {
+        const data = await searchByLogo(referenceFiles, selectedSearchAlbumIds, Number(topK));
+        setSearchResults(data.results);
+        setActiveSearchType("logo");
+        setLastSearchQuery(`${referenceFiles.length} reference photo${referenceFiles.length > 1 ? "s" : ""}`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Search failed.");
     } finally {
@@ -128,16 +172,20 @@ export default function DriveGalleryPage() {
   }
 
   function clearSearch() {
-    setSearchMode(false);
+    setActiveSearchType(null);
     setSearchResults([]);
     setSearchQuery("");
     setLastSearchQuery("");
+    setReferenceFiles([]);
     setActivePage(1);
   }
 
-  useEffect(() => {
-    loadAlbums();
-  }, []);
+  function handleModeChange(mode: SearchMode) {
+    setInputMode(mode);
+    if (isSearchActive) clearSearch();
+  }
+
+  useEffect(() => { loadAlbums(); }, []);
 
   useEffect(() => {
     if (selectedAlbum) {
@@ -160,22 +208,27 @@ export default function DriveGalleryPage() {
       setSelectedSearchAlbumIds((curr) =>
         checked ? [...curr, albumId] : curr.filter((id) => id !== albumId),
       ),
-    onSelectAllForSearch: () =>
-      setSelectedSearchAlbumIds(albums.map((a) => a.id)),
+    onSelectAllForSearch: () => setSelectedSearchAlbumIds(albums.map((a) => a.id)),
     onClearSearchSelection: () => setSelectedSearchAlbumIds([]),
   };
+
+  function headerTitle() {
+    if (!isSearchActive) return selectedAlbum?.name || "Select an album";
+    if (activeSearchType === "text") return `Results for "${lastSearchQuery}"`;
+    if (activeSearchType === "face") return `Face search — ${lastSearchQuery}`;
+    return `Logo search — ${lastSearchQuery}`;
+  }
+
+  function headerSubtitle() {
+    if (!isSearchActive) return `${images.length} photos in gallery`;
+    return `${searchResults.length} matching photos found`;
+  }
 
   return (
     <>
       <Container fluid py="lg" px="xl">
         {error && (
-          <Alert
-            color="red"
-            title="Error"
-            icon={<IconAlertCircle size={18} />}
-            radius="md"
-            mb="lg"
-          >
+          <Alert color="red" title="Error" icon={<IconAlertCircle size={18} />} radius="md" mb="lg">
             {error}
           </Alert>
         )}
@@ -200,19 +253,11 @@ export default function DriveGalleryPage() {
                       <IconMenu2 size={18} />
                     </ActionIcon>
                     <div>
-                      <Title order={3}>
-                        {searchMode
-                          ? `Results for "${lastSearchQuery}"`
-                          : selectedAlbum?.name || "Select an album"}
-                      </Title>
-                      <Text size="sm" c="dimmed">
-                        {searchMode
-                          ? `${searchResults.length} indexed photos found`
-                          : `${images.length} photos in gallery`}
-                      </Text>
+                      <Title order={3}>{headerTitle()}</Title>
+                      <Text size="sm" c="dimmed">{headerSubtitle()}</Text>
                     </div>
                   </Group>
-                  {selectedAlbum && !searchMode && (
+                  {selectedAlbum && !isSearchActive && (
                     <Button
                       variant="light"
                       size="sm"
@@ -226,12 +271,16 @@ export default function DriveGalleryPage() {
                 </Group>
 
                 <SearchBar
+                  mode={inputMode}
                   value={searchQuery}
                   topK={topK}
                   loading={searchLoading}
-                  searchMode={searchMode}
+                  searchActive={isSearchActive}
+                  referenceFiles={referenceFiles}
                   onChange={setSearchQuery}
+                  onModeChange={handleModeChange}
                   onTopKChange={setTopK}
+                  onReferenceFilesChange={setReferenceFiles}
                   onSearch={handleSearch}
                   onClear={clearSearch}
                 />
@@ -241,7 +290,8 @@ export default function DriveGalleryPage() {
             <PhotoGrid
               images={paginatedImages}
               loading={imagesLoading || searchLoading}
-              searchMode={searchMode}
+              searchMode={isSearchActive}
+              searchLabel={activeSearchType ? SEARCH_LABELS[activeSearchType] : undefined}
               activePage={activePage}
               totalPages={totalPages}
               totalCount={visibleImages.length}
@@ -265,10 +315,7 @@ export default function DriveGalleryPage() {
         <AlbumSidebar {...albumSidebarProps} />
       </Drawer>
 
-      <PhotoPreviewModal
-        image={previewImage}
-        onClose={() => setPreviewImage(null)}
-      />
+      <PhotoPreviewModal image={previewImage} onClose={() => setPreviewImage(null)} />
     </>
   );
 }

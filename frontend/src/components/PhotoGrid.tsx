@@ -21,6 +21,7 @@ type PhotoGridProps = {
   images: DriveFileInfo[];
   loading: boolean;
   searchMode: boolean;
+  searchLabel?: string;
   activePage: number;
   totalPages: number;
   totalCount: number;
@@ -41,6 +42,7 @@ export function PhotoGrid({
   images,
   loading,
   searchMode,
+  searchLabel = "AI search results",
   activePage,
   totalPages,
   totalCount,
@@ -64,7 +66,7 @@ export function PhotoGrid({
             <IconSearch size={12} />
           </ThemeIcon>
           <Text size="sm" fw={500} c="brand">
-            AI search results
+            {searchLabel}
           </Text>
         </Group>
       )}

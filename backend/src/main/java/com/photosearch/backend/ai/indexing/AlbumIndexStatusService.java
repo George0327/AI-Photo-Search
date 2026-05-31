@@ -32,7 +32,9 @@ public class AlbumIndexStatusService {
                 indexedImages,
                 needsIndexImages,
                 deletedImages,
-                deletedImages > 0
+                deletedImages > 0,
+                album.getFaceIndexedAt(),
+                album.getLogoIndexedAt()
         );
     }
 

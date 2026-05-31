@@ -58,4 +58,12 @@ public interface MediaItemRepository extends JpaRepository<MediaItem, Long> {
     );
 
     boolean existsByDriveFileId(String driveFileId);
+
+    @Query("""
+            select m from MediaItem m
+            join fetch m.album
+            where m.driveFileId in :driveFileIds
+              and m.deletedInDrive = false
+            """)
+    List<MediaItem> findActiveByDriveFileIdIn(@Param("driveFileIds") Collection<String> driveFileIds);
 }

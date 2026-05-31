@@ -11,6 +11,8 @@ register_heif_opener()
 class ClipModel:
     def __init__(self, model_name: str = "ViT-L-14", pretrained: str = "openai") -> None:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.model_name = model_name
+        self.pretrained = pretrained
         self.model, _, self.preprocess = open_clip.create_model_and_transforms(
             model_name=model_name,
             pretrained=pretrained,

@@ -9,6 +9,8 @@ export type AlbumIndexStatus = {
   needsIndexImages: number;
   deletedImages: number;
   reindexRecommended: boolean;
+  faceIndexedAt: string | null;
+  logoIndexedAt: string | null;
 };
 
 export type DriveIndexFailure = {
@@ -42,4 +44,12 @@ export function reindexAlbum(albumId: string): Promise<DriveIndexResult> {
 
 export function indexAllNewPhotos(): Promise<DriveIndexResult> {
   return postJson<DriveIndexResult>("/api/admin/ai/index-all");
+}
+
+export function indexFaces(albumId: string): Promise<DriveIndexResult> {
+  return postJson<DriveIndexResult>(`/api/admin/ai/index-faces/${albumId}`);
+}
+
+export function indexLogos(albumId: string): Promise<DriveIndexResult> {
+  return postJson<DriveIndexResult>(`/api/admin/ai/index-logos/${albumId}`);
 }

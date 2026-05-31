@@ -1,6 +1,9 @@
-from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional
 
+from pydantic import BaseModel, Field
+
+
+# ── CLIP semantic search ──────────────────────────────────────────────────────
 
 class SearchRequest(BaseModel):
     query: str = Field(..., min_length=1, description="Natural language search query")
@@ -21,6 +24,50 @@ class SearchResponse(BaseModel):
     top_k: int
     results: List[SearchResultItem]
 
+
+# ── Face indexing / search ────────────────────────────────────────────────────
+
+class FaceIndexResponse(BaseModel):
+    success: bool
+    face_count: int
+    message: str
+
+
+class FaceSearchResultItem(BaseModel):
+    item_id: str
+    album_id: str
+    score: float
+    matched_bbox: List[int]  # [x1, y1, x2, y2]
+
+
+class FaceSearchResponse(BaseModel):
+    success: bool
+    message: str
+    results: List[FaceSearchResultItem]
+
+
+# ── Logo indexing / search ────────────────────────────────────────────────────
+
+class LogoIndexResponse(BaseModel):
+    success: bool
+    logo_region_count: int
+    message: str
+
+
+class LogoSearchResultItem(BaseModel):
+    item_id: str
+    album_id: str
+    score: float
+    matched_bbox: List[int]  # [x1, y1, x2, y2]
+
+
+class LogoSearchResponse(BaseModel):
+    success: bool
+    message: str
+    results: List[LogoSearchResultItem]
+
+
+# ── Health ────────────────────────────────────────────────────────────────────
 
 class HealthResponse(BaseModel):
     status: str

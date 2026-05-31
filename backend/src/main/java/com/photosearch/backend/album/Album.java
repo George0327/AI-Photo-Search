@@ -42,6 +42,10 @@ public class Album {
 
     private Instant lastIndexedAt;
 
+    private Instant faceIndexedAt;
+
+    private Instant logoIndexedAt;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
