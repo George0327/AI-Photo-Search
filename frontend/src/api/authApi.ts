@@ -7,8 +7,6 @@ export type AuthUser = {
   authorities: string[];
 };
 
-const BACKEND_BASE_URL = "http://localhost:8080";
-
 export async function fetchCurrentUser(): Promise<AuthUser> {
   const response = await fetch("/api/auth/me", {
     credentials: "include",
@@ -29,7 +27,7 @@ export async function fetchCurrentUser(): Promise<AuthUser> {
 }
 
 export function loginWithGoogle() {
-  window.location.href = `${BACKEND_BASE_URL}/oauth2/authorization/google`;
+  window.location.href = "/oauth2/authorization/google";
 }
 
 export async function logout() {

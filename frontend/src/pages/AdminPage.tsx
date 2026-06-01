@@ -27,7 +27,7 @@ export default function AdminPage() {
     anyAlbumBusy,
     failures,
     error,
-    loadAlbumStatuses,
+    syncAlbumStatuses,
     handleIndexAlbum,
     handleReindexAlbum,
     handleIndexAllNewPhotos,
@@ -55,7 +55,7 @@ export default function AdminPage() {
             <Button
               variant="light"
               leftSection={<IconRefresh size={16} />}
-              onClick={loadAlbumStatuses}
+              onClick={syncAlbumStatuses}
               loading={albumsLoading}
               disabled={anyAlbumBusy}
             >

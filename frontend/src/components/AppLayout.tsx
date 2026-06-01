@@ -14,6 +14,7 @@ import { Link, useLocation } from "react-router-dom";
 import { IconSparkles } from "@tabler/icons-react";
 import type { ReactNode } from "react";
 import type { AuthUser } from "../api/authApi";
+import { isElevated } from "../utils/roles";
 
 type AppLayoutProps = {
   user: AuthUser;
@@ -27,7 +28,7 @@ export default function AppLayout({
   children,
 }: AppLayoutProps) {
   const location = useLocation();
-  const isAdmin = user.authorities.includes("ROLE_ADMIN");
+  const elevated = isElevated(user.authorities);
 
   return (
     <AppShell header={{ height: 64 }}>
@@ -58,13 +59,23 @@ export default function AppLayout({
                 Gallery
               </Button>
 
-              {isAdmin && (
+              {elevated && (
                 <Button
                   component={Link}
                   to="/admin"
                   variant={location.pathname === "/admin" ? "filled" : "subtle"}
                 >
                   Admin
+                </Button>
+              )}
+
+              {elevated && (
+                <Button
+                  component={Link}
+                  to="/users"
+                  variant={location.pathname === "/users" ? "filled" : "subtle"}
+                >
+                  Users
                 </Button>
               )}
             </Group>

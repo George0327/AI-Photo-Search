@@ -9,6 +9,7 @@ export type AlbumIndexStatus = {
   needsIndexImages: number;
   deletedImages: number;
   reindexRecommended: boolean;
+  indexingImages: boolean;
   faceIndexedAt: string | null;
   logoIndexedAt: string | null;
 };
@@ -32,6 +33,10 @@ export type DriveIndexResult = {
 
 export function fetchAlbumIndexStatuses(): Promise<AlbumIndexStatus[]> {
   return fetchJson<AlbumIndexStatus[]>("/api/admin/ai/albums/status");
+}
+
+export function syncAndFetchAlbumStatuses(): Promise<AlbumIndexStatus[]> {
+  return postJson<AlbumIndexStatus[]>("/api/admin/ai/albums/sync");
 }
 
 export function indexAlbum(albumId: string): Promise<DriveIndexResult> {

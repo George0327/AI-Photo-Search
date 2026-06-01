@@ -3,6 +3,7 @@ import {
   Button,
   Card,
   Group,
+  Loader,
   Stack,
   Table,
   Text,
@@ -73,6 +74,9 @@ export function AlbumIndexTable({
                 album.totalActiveImages > 0 &&
                 album.needsIndexImages === 0 &&
                 album.deletedImages === 0;
+              const isIndexingNow =
+                indexingAlbumId === album.driveAlbumId ||
+                reindexingAlbumId === album.driveAlbumId;
 
               return (
                 <Table.Tr key={album.driveAlbumId}>
@@ -103,7 +107,11 @@ export function AlbumIndexTable({
                   </Table.Td>
 
                   <Table.Td>
-                    {hasDeletedPhotos ? (
+                    {isIndexingNow ? (
+                      <Badge color="blue" leftSection={<Loader size={10} color="blue" />}>
+                        Indexing
+                      </Badge>
+                    ) : hasDeletedPhotos ? (
                       <Badge color="red">Reindex recommended</Badge>
                     ) : hasNewPhotos ? (
                       <Badge color="yellow">New photos</Badge>
@@ -147,7 +155,7 @@ export function AlbumIndexTable({
                         size="xs"
                         leftSection={<IconSparkles size={14} />}
                         onClick={() => onIndexAlbum(album)}
-                        loading={indexingAlbumId === album.driveAlbumId}
+                        loading={isIndexingNow}
                         disabled={anyBusy || !hasNewPhotos}
                       >
                         Index new

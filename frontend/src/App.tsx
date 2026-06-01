@@ -4,6 +4,7 @@ import {
   Center,
   Container,
   Loader,
+  Modal,
   Paper,
   Stack,
   Text,
@@ -14,13 +15,16 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import DriveGalleryPage from "./pages/DriveGalleryPage";
 import AdminPage from "./pages/AdminPage";
+import UsersPage from "./pages/UsersPage";
 import AppLayout from "./components/AppLayout";
 import { fetchCurrentUser, loginWithGoogle, logout } from "./api/authApi";
 import type { AuthUser } from "./api/authApi";
+import { isElevated } from "./utils/roles";
 
 export default function App() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sessionExpired, setSessionExpired] = useState(false);
 
   async function loadCurrentUser() {
     try {
@@ -36,11 +40,40 @@ export default function App() {
     loadCurrentUser();
   }, []);
 
+  useEffect(() => {
+    const handler = () => setSessionExpired(true);
+    window.addEventListener("session-expired", handler);
+    return () => window.removeEventListener("session-expired", handler);
+  }, []);
+
   if (loading) {
     return (
       <Center h="100vh">
         <Loader />
       </Center>
+    );
+  }
+
+  if (sessionExpired) {
+    return (
+      <Modal
+        opened
+        onClose={() => {}}
+        withCloseButton={false}
+        centered
+        title="Session expired"
+        closeOnClickOutside={false}
+        closeOnEscape={false}
+      >
+        <Stack>
+          <Text size="sm" c="dimmed">
+            Your session has expired. Please log in again to continue.
+          </Text>
+          <Button fullWidth onClick={logout}>
+            Log out
+          </Button>
+        </Stack>
+      </Modal>
     );
   }
 
@@ -90,7 +123,7 @@ export default function App() {
     );
   }
 
-  const isAdmin = user.authorities.includes("ROLE_ADMIN");
+  const elevated = isElevated(user.authorities);
 
   return (
     <BrowserRouter>
@@ -100,7 +133,18 @@ export default function App() {
 
           <Route
             path="/admin"
-            element={isAdmin ? <AdminPage /> : <Navigate to="/" replace />}
+            element={elevated ? <AdminPage /> : <Navigate to="/" replace />}
+          />
+
+          <Route
+            path="/users"
+            element={
+              elevated ? (
+                <UsersPage currentUserAuthorities={user.authorities} />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
           />
 
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,0 +1,46 @@
+http:
+  routers:
+    auth:
+      entryPoints: [web]
+      rule: "PathPrefix(`/api/auth`) || PathPrefix(`/api/admin/users`) || PathPrefix(`/login`) || PathPrefix(`/oauth2`) || Path(`/error`)"
+      service: auth
+      priority: 10
+
+    indexing:
+      entryPoints: [web]
+      rule: "PathPrefix(`/api/drive`) || PathPrefix(`/api/admin/ai`)"
+      service: indexing
+      priority: 10
+
+    search:
+      entryPoints: [web]
+      rule: "PathPrefix(`/api/search`)"
+      service: search
+      priority: 10
+
+    frontend:
+      entryPoints: [web]
+      rule: "PathPrefix(`/`)"
+      service: frontend
+      priority: 1
+
+  services:
+    auth:
+      loadBalancer:
+        servers:
+          - url: "http://auth-service:8081"
+
+    indexing:
+      loadBalancer:
+        servers:
+          - url: "http://indexing-service:8082"
+
+    search:
+      loadBalancer:
+        servers:
+          - url: "http://search-service:8083"
+
+    frontend:
+      loadBalancer:
+        servers:
+          - url: "http://frontend:80"

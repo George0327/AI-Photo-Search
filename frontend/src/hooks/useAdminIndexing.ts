@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { notifications } from "@mantine/notifications";
 import {
   fetchAlbumIndexStatuses,
+  syncAndFetchAlbumStatuses,
   indexAlbum,
   indexAllNewPhotos,
   indexFaces,
@@ -38,6 +39,19 @@ export function useAdminIndexing() {
       setAlbums(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load album indexing statuses.");
+    } finally {
+      setAlbumsLoading(false);
+    }
+  }
+
+  async function syncAlbumStatuses() {
+    try {
+      setError(null);
+      setAlbumsLoading(true);
+      const data = await syncAndFetchAlbumStatuses();
+      setAlbums(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to sync albums from Drive.");
     } finally {
       setAlbumsLoading(false);
     }
@@ -119,6 +133,33 @@ export function useAdminIndexing() {
     loadAlbumStatuses();
   }, []);
 
+  // Restore in-progress indexing state when albums load (e.g. after navigation)
+  useEffect(() => {
+    const activeAlbum = albums.find(a => a.indexingImages);
+    if (activeAlbum && indexingAlbumId === null) {
+      setIndexingAlbumId(activeAlbum.driveAlbumId);
+    } else if (!activeAlbum && indexingAlbumId !== null && !anyAlbumBusy) {
+      setIndexingAlbumId(null);
+    }
+  }, [albums]);
+
+  // Poll every 3 seconds while any album is actively indexing
+  useEffect(() => {
+    const isPolling = albums.some(a => a.indexingImages);
+    if (!isPolling) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const data = await fetchAlbumIndexStatuses();
+        setAlbums(data);
+      } catch {
+        // ignore polling errors
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [albums]);
+
   return {
     albums,
     albumsLoading,
@@ -131,6 +172,7 @@ export function useAdminIndexing() {
     failures,
     error,
     loadAlbumStatuses,
+    syncAlbumStatuses,
     handleIndexAlbum,
     handleReindexAlbum,
     handleIndexAllNewPhotos,

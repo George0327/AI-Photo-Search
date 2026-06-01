@@ -27,10 +27,11 @@ target/
 *.war
 .mvn/wrapper/maven-wrapper.jar
 
-# Images
+# AI service
 ai-service/data/
 ai-service/indexes/
 ai-service/client_secret.json
+ai-service/.venv/
 
 # Node
 node_modules/
