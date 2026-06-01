@@ -1,3 +1,5 @@
+import { BASE_URL } from "./apiClient";
+
 export type AuthUser = {
   authenticated: boolean;
   sub: string;
@@ -8,7 +10,7 @@ export type AuthUser = {
 };
 
 export async function fetchCurrentUser(): Promise<AuthUser> {
-  const response = await fetch("/api/auth/me", {
+  const response = await fetch(`${BASE_URL}/api/auth/me`, {
     credentials: "include",
   });
 
@@ -27,11 +29,11 @@ export async function fetchCurrentUser(): Promise<AuthUser> {
 }
 
 export function loginWithGoogle() {
-  window.location.href = "/oauth2/authorization/google";
+  window.location.href = `${BASE_URL}/oauth2/authorization/google`;
 }
 
 export async function logout() {
-  await fetch("/api/auth/logout", {
+  await fetch(`${BASE_URL}/api/auth/logout`, {
     method: "POST",
     credentials: "include",
   });

@@ -1,3 +1,4 @@
+import { BASE_URL } from "./apiClient";
 import type { DriveFileInfo } from "./driveApi";
 
 export type LogoSearchResult = {
@@ -26,7 +27,7 @@ export async function searchByLogo(
   }
   formData.append("topK", String(topK));
 
-  const response = await fetch("/api/search/logos", {
+  const response = await fetch(`${BASE_URL}/api/search/logos`, {
     method: "POST",
     credentials: "include",
     body: formData,

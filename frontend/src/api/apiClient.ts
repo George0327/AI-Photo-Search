@@ -1,9 +1,11 @@
+export const BASE_URL = import.meta.env.VITE_API_URL ?? "";
+
 export function dispatchSessionExpired() {
   window.dispatchEvent(new Event("session-expired"));
 }
 
 export async function fetchJson<T>(url: string): Promise<T> {
-  const response = await fetch(url, { credentials: "include" });
+  const response = await fetch(`${BASE_URL}${url}`, { credentials: "include" });
 
   if (response.status === 401) {
     dispatchSessionExpired();
@@ -23,7 +25,7 @@ export async function fetchJson<T>(url: string): Promise<T> {
 }
 
 export async function postJson<T>(url: string): Promise<T> {
-  const response = await fetch(url, { method: "POST", credentials: "include" });
+  const response = await fetch(`${BASE_URL}${url}`, { method: "POST", credentials: "include" });
 
   if (response.status === 401) {
     dispatchSessionExpired();
@@ -43,7 +45,7 @@ export async function postJson<T>(url: string): Promise<T> {
 }
 
 export async function patchJson<T>(url: string, body: unknown): Promise<T> {
-  const response = await fetch(url, {
+  const response = await fetch(`${BASE_URL}${url}`, {
     method: "PATCH",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
