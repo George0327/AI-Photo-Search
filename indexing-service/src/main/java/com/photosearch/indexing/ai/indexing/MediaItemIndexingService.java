@@ -7,6 +7,8 @@ import com.photosearch.indexing.drive.GoogleDriveService;
 import com.photosearch.indexing.media.IndexingStatus;
 import com.photosearch.indexing.media.MediaItem;
 import com.photosearch.indexing.media.MediaItemRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
@@ -19,6 +21,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 public class MediaItemIndexingService {
+
+    private static final Logger log = LoggerFactory.getLogger(MediaItemIndexingService.class);
 
     private final GoogleDriveService googleDriveService;
     private final AiServiceClient aiServiceClient;
@@ -66,6 +70,7 @@ public class MediaItemIndexingService {
                         "Skipped: media item is marked deleted in Drive."));
                 return false;
             }
+            log.info("Indexing [{}]", filename);
             mediaItem.setIndexingStatus(IndexingStatus.INDEXING);
             mediaItem.setIndexingError(null);
             mediaItemRepository.save(mediaItem);
@@ -80,12 +85,14 @@ public class MediaItemIndexingService {
                 return false;
             }
 
+            log.info("Indexed  [{}]", filename);
             mediaItem.setIndexingStatus(IndexingStatus.INDEXED);
             mediaItem.setFaissIndexedAt(Instant.now());
             mediaItem.setIndexingError(null);
             mediaItemRepository.save(mediaItem);
             return true;
         } catch (Exception e) {
+            log.warn("Failed   [{}]: {}", filename, e.getMessage());
             markFailed(mediaItem, fileId, filename, e.getMessage(), failures);
             return false;
         }

@@ -32,7 +32,12 @@ public class DriveAlbumSyncService {
 
         for (DriveFileInfo driveAlbum : driveAlbums) {
             currentDriveAlbumIds.add(driveAlbum.getId());
-            syncedAlbums.add(syncAlbumMetadata(driveAlbum.getId()));
+            Album album = syncAlbumMetadata(driveAlbum.getId());
+            if (!Objects.equals(album.getYear(), driveAlbum.getYear())) {
+                album.setYear(driveAlbum.getYear());
+                albumRepository.save(album);
+            }
+            syncedAlbums.add(album);
         }
 
         List<Album> activeDbAlbums = albumRepository.findByDeletedInDriveFalseOrderByTitleAsc();

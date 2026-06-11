@@ -17,4 +17,5 @@ public class DriveFileInfo {
     private boolean trashed;
     private boolean folder;
     private String thumbnailLink;
+    private String year;
 }

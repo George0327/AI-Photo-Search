@@ -7,6 +7,7 @@ export type DriveFileInfo = {
   modifiedTime: string | null;
   trashed: boolean;
   folder: boolean;
+  year?: string;
 };
 
 import { BASE_URL, fetchJson } from "./apiClient";

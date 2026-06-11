@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { notifications } from "@mantine/notifications";
 import {
   fetchAlbumIndexStatuses,
@@ -6,7 +6,6 @@ import {
   indexAlbum,
   indexAllNewPhotos,
   indexFaces,
-  indexLogos,
   reindexAlbum,
 } from "../api/adminAiApi";
 import type { AlbumIndexStatus, DriveIndexFailure, DriveIndexResult } from "../api/adminAiApi";
@@ -19,17 +18,19 @@ export function useAdminIndexing() {
   const [reindexingAlbumId, setReindexingAlbumId] = useState<string | null>(null);
   const [indexingAll, setIndexingAll] = useState(false);
   const [indexingFacesAlbumId, setIndexingFacesAlbumId] = useState<string | null>(null);
-  const [indexingLogosAlbumId, setIndexingLogosAlbumId] = useState<string | null>(null);
 
   const [failures, setFailures] = useState<DriveIndexFailure[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  // Tracks whether an HTTP indexing request is currently in flight.
+  // Used by the restore effect to avoid a circular dependency with anyAlbumBusy.
+  const operationInFlight = useRef(false);
 
   const anyAlbumBusy =
     indexingAlbumId !== null ||
     reindexingAlbumId !== null ||
     indexingAll ||
-    indexingFacesAlbumId !== null ||
-    indexingLogosAlbumId !== null;
+    indexingFacesAlbumId !== null;
 
   async function loadAlbumStatuses() {
     try {
@@ -63,9 +64,19 @@ export function useAdminIndexing() {
     apiCall: () => Promise<DriveIndexResult>,
     successTitle = "Success",
     countLabel = "photo",
+    startMessage?: string,
   ) {
     setError(null);
     setFailures([]);
+    if (startMessage) {
+      notifications.show({
+        title: "Started",
+        message: startMessage,
+        color: "blue",
+        autoClose: 3000,
+      });
+    }
+    operationInFlight.current = true;
     startLoading();
     try {
       const data = await apiCall();
@@ -97,6 +108,7 @@ export function useAdminIndexing() {
         setError(msg || "Operation failed.");
       }
     } finally {
+      operationInFlight.current = false;
       stopLoading();
     }
   }
@@ -106,6 +118,9 @@ export function useAdminIndexing() {
       () => setIndexingAlbumId(album.driveAlbumId),
       () => setIndexingAlbumId(null),
       () => indexAlbum(album.driveAlbumId),
+      "Indexing complete",
+      "photo",
+      `Indexing new photos in "${album.title}"…`,
     );
   }
 
@@ -114,6 +129,9 @@ export function useAdminIndexing() {
       () => setReindexingAlbumId(album.driveAlbumId),
       () => setReindexingAlbumId(null),
       () => reindexAlbum(album.driveAlbumId),
+      "Reindex complete",
+      "photo",
+      `Reindexing all photos in "${album.title}"…`,
     );
   }
 
@@ -122,6 +140,9 @@ export function useAdminIndexing() {
       () => setIndexingAll(true),
       () => setIndexingAll(false),
       indexAllNewPhotos,
+      "Indexing complete",
+      "photo",
+      "Indexing new photos across all albums…",
     );
   }
 
@@ -132,16 +153,7 @@ export function useAdminIndexing() {
       () => indexFaces(album.driveAlbumId),
       "Faces indexed",
       "face",
-    );
-  }
-
-  function handleIndexLogos(album: AlbumIndexStatus) {
-    return runOperation(
-      () => setIndexingLogosAlbumId(album.driveAlbumId),
-      () => setIndexingLogosAlbumId(null),
-      () => indexLogos(album.driveAlbumId),
-      "Logos indexed",
-      "logo region",
+      `Indexing faces in "${album.title}"…`,
     );
   }
 
@@ -149,19 +161,27 @@ export function useAdminIndexing() {
     loadAlbumStatuses();
   }, []);
 
-  // Restore in-progress indexing state when albums load (e.g. after navigation)
+  // Restore in-progress indexing state when albums load (e.g. after navigation or page refresh).
+  // Uses operationInFlight ref (not anyAlbumBusy) to avoid a circular dependency where
+  // anyAlbumBusy is always true when indexingAlbumId !== null.
   useEffect(() => {
-    const activeAlbum = albums.find(a => a.indexingImages);
-    if (activeAlbum && indexingAlbumId === null) {
-      setIndexingAlbumId(activeAlbum.driveAlbumId);
-    } else if (!activeAlbum && indexingAlbumId !== null && !anyAlbumBusy) {
+    const activeClip  = albums.find(a => a.indexingImages);
+    const activeFaces = albums.find(a => a.indexingFaces);
+
+    if (activeClip && indexingAlbumId === null)
+      setIndexingAlbumId(activeClip.driveAlbumId);
+    else if (!activeClip && indexingAlbumId !== null && !operationInFlight.current)
       setIndexingAlbumId(null);
-    }
+
+    if (activeFaces && indexingFacesAlbumId === null)
+      setIndexingFacesAlbumId(activeFaces.driveAlbumId);
+    else if (!activeFaces && indexingFacesAlbumId !== null && !operationInFlight.current)
+      setIndexingFacesAlbumId(null);
   }, [albums]);
 
-  // Poll every 3 seconds while any album is actively indexing
+  // Poll every 3 seconds while any album is actively indexing (CLIP, faces, or logos)
   useEffect(() => {
-    const isPolling = albums.some(a => a.indexingImages);
+    const isPolling = albums.some(a => a.indexingImages || a.indexingFaces);
     if (!isPolling) return;
 
     const interval = setInterval(async () => {
@@ -183,7 +203,6 @@ export function useAdminIndexing() {
     reindexingAlbumId,
     indexingAll,
     indexingFacesAlbumId,
-    indexingLogosAlbumId,
     anyAlbumBusy,
     failures,
     error,
@@ -193,6 +212,5 @@ export function useAdminIndexing() {
     handleReindexAlbum,
     handleIndexAllNewPhotos,
     handleIndexFaces,
-    handleIndexLogos,
   };
 }

@@ -5,8 +5,7 @@ from fastapi import FastAPI
 import app.state as state
 from app.clip_model import ClipModel
 from app.face_model import FaceModel
-from app.logo_region_detector import LogoRegionDetector
-from app.routers import clip, faces, logos
+from app.routers import clip, faces
 from app.schemas import HealthResponse
 
 
@@ -19,9 +18,6 @@ async def lifespan(app: FastAPI):
     state.face_model = FaceModel()
     print("Face model ready — InsightFace buffalo_l")
 
-    state.logo_detector = LogoRegionDetector()
-    print("Logo detector ready — OWL-ViT v2")
-
     state.ALBUM_INDEX_ROOT.mkdir(parents=True, exist_ok=True)
     print("AI service ready.")
     yield
@@ -31,7 +27,6 @@ app = FastAPI(title="AI Photo Search Service", version="2.0.0", lifespan=lifespa
 
 app.include_router(clip.router)
 app.include_router(faces.router)
-app.include_router(logos.router)
 
 
 @app.get("/health", response_model=HealthResponse)

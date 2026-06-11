@@ -43,8 +43,8 @@ class FaissStore:
     def save(self, index_path: str | Path, items_path: str | Path) -> None:
         index_path = Path(index_path)
         items_path = Path(items_path)
-        tmp_index = index_path.with_suffix(".tmp")
-        tmp_items = items_path.with_suffix(".tmp")
+        tmp_index = index_path.with_name(index_path.name + ".tmp")
+        tmp_items = items_path.with_name(items_path.name + ".tmp")
         try:
             faiss.write_index(self.index, str(tmp_index))
             tmp_items.write_text(json.dumps(self.items, indent=2), encoding="utf-8")

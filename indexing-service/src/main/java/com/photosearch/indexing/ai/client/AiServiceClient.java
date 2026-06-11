@@ -2,8 +2,6 @@ package com.photosearch.indexing.ai.client;
 
 import com.photosearch.indexing.ai.dto.AiFaceIndexResponse;
 import com.photosearch.indexing.ai.dto.AiIndexResponse;
-import com.photosearch.indexing.ai.dto.AiLogoIndexResponse;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.*;
@@ -61,14 +59,6 @@ public class AiServiceClient {
                 properties.getBaseUrl() + "/index/albums/" + albumId + "/faces",
                 buildImageMultipart(imageId, fileName, mimeType, imageBytes),
                 AiFaceIndexResponse.class);
-    }
-
-    public AiLogoIndexResponse indexAlbumLogos(String albumId, String imageId,
-            String fileName, String mimeType, byte[] imageBytes) {
-        return restTemplate.postForObject(
-                properties.getBaseUrl() + "/index/albums/" + albumId + "/logos",
-                buildImageMultipart(imageId, fileName, mimeType, imageBytes),
-                AiLogoIndexResponse.class);
     }
 
     private HttpEntity<MultiValueMap<String, Object>> buildImageMultipart(

@@ -28,10 +28,15 @@ public class Album {
     @Column(nullable = false) @Builder.Default
     private boolean deletedInDrive = false;
 
+    @Column(length = 10)
+    private String year;
+
+    @Column(columnDefinition = "boolean not null default false") @Builder.Default
+    private boolean indexingFaces = false;
+
     private Instant lastSyncedAt;
     private Instant lastIndexedAt;
     private Instant faceIndexedAt;
-    private Instant logoIndexedAt;
 
     @Column(nullable = false, updatable = false) private Instant createdAt;
     @Column(nullable = false) private Instant updatedAt;

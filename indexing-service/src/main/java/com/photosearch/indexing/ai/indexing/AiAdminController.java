@@ -43,8 +43,4 @@ public class AiAdminController {
         return faceLogoIndexingService.indexFacesForAlbum(albumId);
     }
 
-    @PostMapping("/index-logos/{albumId}")
-    public DriveIndexResult indexLogos(@PathVariable String albumId) {
-        return faceLogoIndexingService.indexLogosForAlbum(albumId);
-    }
 }

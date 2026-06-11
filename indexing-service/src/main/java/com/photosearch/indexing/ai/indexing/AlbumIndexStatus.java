@@ -6,12 +6,13 @@ public record AlbumIndexStatus(
         Long albumDatabaseId,
         String driveAlbumId,
         String title,
+        String year,
         long totalActiveImages,
         long indexedImages,
         long needsIndexImages,
         long deletedImages,
         boolean reindexRecommended,
         boolean indexingImages,
-        Instant faceIndexedAt,
-        Instant logoIndexedAt
+        boolean indexingFaces,
+        Instant faceIndexedAt
 ) {}

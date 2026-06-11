@@ -13,12 +13,12 @@ class FaceModel:
     """
 
     def __init__(self) -> None:
-        self.app = FaceAnalysis(
-            name="buffalo_l",
-            providers=["CPUExecutionProvider"],
-        )
-        # det_size controls the detection resolution; 640x640 is a good balance
-        self.app.prepare(ctx_id=0, det_size=(640, 640))
+        import torch
+        providers = ["CUDAExecutionProvider", "CPUExecutionProvider"] \
+            if torch.cuda.is_available() else ["CPUExecutionProvider"]
+        self.app = FaceAnalysis(name="buffalo_l", providers=providers)
+        ctx_id = 0 if torch.cuda.is_available() else -1
+        self.app.prepare(ctx_id=ctx_id, det_size=(640, 640))
 
     def extract_faces(self, image_bytes: bytes) -> list[dict]:
         """

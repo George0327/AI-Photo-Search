@@ -23,9 +23,10 @@ public class AlbumIndexStatusService {
         long deletedImages = mediaItemRepository.countByAlbumAndDeletedInDriveTrue(album);
         long indexingImages = mediaItemRepository.countByAlbumAndDeletedInDriveFalseAndIndexingStatus(album, IndexingStatus.INDEXING);
 
-        return new AlbumIndexStatus(album.getId(), album.getDriveFolderId(), album.getTitle(),
+        return new AlbumIndexStatus(album.getId(), album.getDriveFolderId(), album.getTitle(), album.getYear(),
                 totalActiveImages, indexedImages, needsIndexImages, deletedImages,
-                deletedImages > 0, indexingImages > 0, album.getFaceIndexedAt(), album.getLogoIndexedAt());
+                deletedImages > 0, indexingImages > 0, album.isIndexingFaces(),
+                album.getFaceIndexedAt());
     }
 
     public DriveIndexResult buildDriveIndexResult(int albumCount, List<Album> albums,

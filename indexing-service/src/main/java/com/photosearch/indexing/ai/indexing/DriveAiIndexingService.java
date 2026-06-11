@@ -10,7 +10,9 @@ import com.photosearch.indexing.media.MediaItemRepository;
 import com.photosearch.indexing.sync.SyncRun;
 import com.photosearch.indexing.sync.SyncType;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -45,6 +47,10 @@ public class DriveAiIndexingService {
             Album album = driveAlbumSyncService.syncAlbumMetadata(driveAlbumId);
             syncRunService.setTargetAlbum(syncRun, album.getDriveFolderId(), album.getTitle());
 
+            if (mediaItemRepository.countByAlbumAndDeletedInDriveFalseAndIndexingStatus(album, IndexingStatus.INDEXING) > 0) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "CLIP indexing is already in progress for this album.");
+            }
+
             List<MediaItem> mediaToIndex = mediaItemRepository
                     .findByAlbumAndDeletedInDriveFalseAndIndexingStatusIn(album, NEEDS_INDEXING_STATUSES);
             MediaIndexingResult indexingResult = mediaItemIndexingService.indexMediaItems(album, mediaToIndex);
@@ -67,6 +73,10 @@ public class DriveAiIndexingService {
         try {
             Album album = driveAlbumSyncService.syncAlbumMetadata(driveAlbumId);
             syncRunService.setTargetAlbum(syncRun, album.getDriveFolderId(), album.getTitle());
+
+            if (mediaItemRepository.countByAlbumAndDeletedInDriveFalseAndIndexingStatus(album, IndexingStatus.INDEXING) > 0) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "CLIP indexing is already in progress for this album.");
+            }
 
             AiIndexResponse resetResponse = aiServiceClient.resetAlbumIndex(driveAlbumId);
             if (resetResponse == null || !resetResponse.success()) {

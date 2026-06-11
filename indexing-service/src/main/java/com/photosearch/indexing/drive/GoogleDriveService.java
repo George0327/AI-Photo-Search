@@ -17,12 +17,14 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
 public class GoogleDriveService {
 
     private static final String FOLDER_MIME_TYPE = "application/vnd.google-apps.folder";
+    private static final Pattern YEAR_PATTERN = Pattern.compile("^\\d{4}$");
     private static final String FILE_FIELDS =
             "files(id,name,mimeType,parents,createdTime,modifiedTime,trashed,thumbnailLink,thumbnailVersion),nextPageToken";
 
@@ -43,7 +45,22 @@ public class GoogleDriveService {
     }
 
     public List<DriveFileInfo> listAlbumFolders(String rootFolderId) {
-        return search(String.format("mimeType = '%s' and trashed = false and '%s' in parents", FOLDER_MIME_TYPE, rootFolderId));
+        List<DriveFileInfo> directChildren = search(String.format(
+                "mimeType = '%s' and trashed = false and '%s' in parents", FOLDER_MIME_TYPE, rootFolderId));
+        List<DriveFileInfo> result = new ArrayList<>();
+        for (DriveFileInfo child : directChildren) {
+            if (YEAR_PATTERN.matcher(child.getName()).matches()) {
+                List<DriveFileInfo> yearAlbums = search(String.format(
+                        "mimeType = '%s' and trashed = false and '%s' in parents", FOLDER_MIME_TYPE, child.getId()));
+                for (DriveFileInfo album : yearAlbums) {
+                    album.setYear(child.getName());
+                    result.add(album);
+                }
+            } else {
+                result.add(child);
+            }
+        }
+        return result;
     }
 
     public List<DriveFileInfo> listImagesInAlbum(String albumFolderId) {

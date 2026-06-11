@@ -11,8 +11,6 @@ from app.clip_model import ClipModel
 from app.detection_faiss_store import DetectionFaissStore
 from app.face_model import FaceModel
 from app.faiss_store import FaissStore
-from app.logo_region_detector import LogoRegionDetector
-
 logger = logging.getLogger(__name__)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -26,7 +24,6 @@ FACE_INDEX_DIM = 512  # ArcFace always produces 512-dim embeddings
 
 model: ClipModel | None = None
 face_model: FaceModel | None = None
-logo_detector: LogoRegionDetector | None = None
 _embedding_dim: int | None = None
 
 # ── Per-album in-memory caches and async locks ───────────────────────────────
@@ -34,11 +31,9 @@ _embedding_dim: int | None = None
 
 _album_stores: dict[str, FaissStore] = {}
 _face_stores: dict[str, DetectionFaissStore] = {}
-_logo_stores: dict[str, DetectionFaissStore] = {}
 
 _album_locks: dict[str, asyncio.Lock] = {}
 _face_locks: dict[str, asyncio.Lock] = {}
-_logo_locks: dict[str, asyncio.Lock] = {}
 
 # Thread pool for CPU-bound ML inference — runs outside the per-album lock.
 # PyTorch releases the GIL during C++ ops, so os.cpu_count() workers gives real parallelism.
@@ -68,12 +63,6 @@ def face_index_path(album_id: str) -> Path:
 def face_items_path(album_id: str) -> Path:
     return album_dir(album_id) / "faces.json"
 
-def logo_index_path(album_id: str) -> Path:
-    return album_dir(album_id) / "logos.index"
-
-def logo_items_path(album_id: str) -> Path:
-    return album_dir(album_id) / "logos.json"
-
 
 # ── Store loaders / getters / savers ─────────────────────────────────────────
 
@@ -87,11 +76,6 @@ def _load_face_store(album_id: str) -> DetectionFaissStore:
         return DetectionFaissStore.load(face_index_path(album_id), face_items_path(album_id))
     return DetectionFaissStore(dimension=FACE_INDEX_DIM)
 
-def _load_logo_store(album_id: str) -> DetectionFaissStore:
-    if logo_index_path(album_id).exists() and logo_items_path(album_id).exists():
-        return DetectionFaissStore.load(logo_index_path(album_id), logo_items_path(album_id))
-    return DetectionFaissStore(dimension=_embedding_dim)
-
 def get_cached_store(album_id: str) -> FaissStore:
     if album_id not in _album_stores:
         _album_stores[album_id] = _load_album_store(album_id)
@@ -102,11 +86,6 @@ def get_cached_face_store(album_id: str) -> DetectionFaissStore:
         _face_stores[album_id] = _load_face_store(album_id)
     return _face_stores[album_id]
 
-def get_cached_logo_store(album_id: str) -> DetectionFaissStore:
-    if album_id not in _logo_stores:
-        _logo_stores[album_id] = _load_logo_store(album_id)
-    return _logo_stores[album_id]
-
 def save_album_store(album_id: str, store: FaissStore) -> None:
     album_dir(album_id).mkdir(parents=True, exist_ok=True)
     store.save(album_index_path(album_id), album_items_path(album_id))
@@ -114,10 +93,6 @@ def save_album_store(album_id: str, store: FaissStore) -> None:
 def save_face_store(album_id: str, store: DetectionFaissStore) -> None:
     album_dir(album_id).mkdir(parents=True, exist_ok=True)
     store.save(face_index_path(album_id), face_items_path(album_id))
-
-def save_logo_store(album_id: str, store: DetectionFaissStore) -> None:
-    album_dir(album_id).mkdir(parents=True, exist_ok=True)
-    store.save(logo_index_path(album_id), logo_items_path(album_id))
 
 
 # ── Misc helpers ──────────────────────────────────────────────────────────────

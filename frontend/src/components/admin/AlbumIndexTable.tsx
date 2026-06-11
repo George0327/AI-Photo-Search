@@ -11,7 +11,7 @@ import {
   Title,
   Tooltip,
 } from "@mantine/core";
-import { IconFaceId, IconSearch, IconSparkles } from "@tabler/icons-react";
+import { IconFaceId, IconSparkles } from "@tabler/icons-react";
 import type { AlbumIndexStatus } from "../../api/adminAiApi";
 
 type AlbumIndexTableProps = {
@@ -19,12 +19,10 @@ type AlbumIndexTableProps = {
   indexingAlbumId: string | null;
   reindexingAlbumId: string | null;
   indexingFacesAlbumId: string | null;
-  indexingLogosAlbumId: string | null;
   anyBusy: boolean;
   onIndexAlbum: (album: AlbumIndexStatus) => void;
   onReindexAlbum: (album: AlbumIndexStatus) => void;
   onIndexFaces: (album: AlbumIndexStatus) => void;
-  onIndexLogos: (album: AlbumIndexStatus) => void;
 };
 
 function formatDate(iso: string | null | undefined): string {
@@ -32,24 +30,20 @@ function formatDate(iso: string | null | undefined): string {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
-const YEAR_RE = /^\d{4}$/;
-
 export function AlbumIndexTable({
   albums,
   indexingAlbumId,
   reindexingAlbumId,
   indexingFacesAlbumId,
-  indexingLogosAlbumId,
   anyBusy,
   onIndexAlbum,
   onReindexAlbum,
   onIndexFaces,
-  onIndexLogos,
 }: AlbumIndexTableProps) {
   const { sortedKeys, grouped } = useMemo(() => {
     const m = new Map<string, AlbumIndexStatus[]>();
     for (const a of albums) {
-      const key = YEAR_RE.test(a.title) ? a.title : "__none__";
+      const key = a.year ?? "__none__";
       if (!m.has(key)) m.set(key, []);
       m.get(key)!.push(a);
     }
@@ -76,7 +70,6 @@ export function AlbumIndexTable({
               <Table.Th>Total</Table.Th>
               <Table.Th>CLIP</Table.Th>
               <Table.Th>Faces</Table.Th>
-              <Table.Th>Logos</Table.Th>
               <Table.Th>Actions</Table.Th>
             </Table.Tr>
           </Table.Thead>
@@ -86,7 +79,7 @@ export function AlbumIndexTable({
               <React.Fragment key={sectionKey}>
                 <Table.Tr>
                   <Table.Td
-                    colSpan={7}
+                    colSpan={6}
                     style={{ background: "var(--mantine-color-default-hover)", padding: "6px 12px" }}
                   >
                     <Text size="xs" fw={700} tt="uppercase" c="dimmed">
@@ -98,7 +91,10 @@ export function AlbumIndexTable({
                 {grouped.get(sectionKey)!.map((album) => {
                   const isIndexingNow =
                     indexingAlbumId === album.driveAlbumId ||
-                    reindexingAlbumId === album.driveAlbumId;
+                    reindexingAlbumId === album.driveAlbumId ||
+                    album.indexingImages;
+                  const isFacesIndexingNow =
+                    indexingFacesAlbumId === album.driveAlbumId || album.indexingFaces;
 
                   const clipBadgeColor = isIndexingNow
                     ? "blue"
@@ -150,34 +146,17 @@ export function AlbumIndexTable({
 
                       <Table.Td>
                         <Tooltip
-                          label={album.faceIndexedAt ? `Indexed: ${formatDate(album.faceIndexedAt)}` : "Not indexed"}
+                          label={isFacesIndexingNow ? "Indexing faces…" : album.faceIndexedAt ? `Indexed: ${formatDate(album.faceIndexedAt)}` : "Not indexed"}
                           withArrow
                         >
                           <Badge
                             size="sm"
-                            color={album.faceIndexedAt ? "teal" : "gray"}
+                            color={isFacesIndexingNow ? "blue" : album.faceIndexedAt ? "teal" : "gray"}
                             variant="light"
-                            leftSection={<IconFaceId size={10} />}
+                            leftSection={isFacesIndexingNow ? <Loader size={10} color="blue" /> : <IconFaceId size={10} />}
                             style={{ cursor: "default" }}
                           >
-                            {album.faceIndexedAt ? "Indexed" : "—"}
-                          </Badge>
-                        </Tooltip>
-                      </Table.Td>
-
-                      <Table.Td>
-                        <Tooltip
-                          label={album.logoIndexedAt ? `Indexed: ${formatDate(album.logoIndexedAt)}` : "Not indexed"}
-                          withArrow
-                        >
-                          <Badge
-                            size="sm"
-                            color={album.logoIndexedAt ? "teal" : "gray"}
-                            variant="light"
-                            leftSection={<IconSearch size={10} />}
-                            style={{ cursor: "default" }}
-                          >
-                            {album.logoIndexedAt ? "Indexed" : "—"}
+                            {isFacesIndexingNow ? "Indexing…" : album.faceIndexedAt ? "Indexed" : "—"}
                           </Badge>
                         </Tooltip>
                       </Table.Td>
@@ -211,23 +190,12 @@ export function AlbumIndexTable({
                             color="teal"
                             leftSection={<IconFaceId size={14} />}
                             onClick={() => onIndexFaces(album)}
-                            loading={indexingFacesAlbumId === album.driveAlbumId}
+                            loading={isFacesIndexingNow}
                             disabled={anyBusy || album.totalActiveImages === 0}
                           >
                             Faces
                           </Button>
 
-                          <Button
-                            size="xs"
-                            variant="light"
-                            color="violet"
-                            leftSection={<IconSearch size={14} />}
-                            onClick={() => onIndexLogos(album)}
-                            loading={indexingLogosAlbumId === album.driveAlbumId}
-                            disabled={anyBusy || album.totalActiveImages === 0}
-                          >
-                            Logos
-                          </Button>
                         </Group>
                       </Table.Td>
                     </Table.Tr>

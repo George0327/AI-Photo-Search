@@ -18,7 +18,6 @@ import { IconPhoto } from "@tabler/icons-react";
 import type { DriveFileInfo } from "../api/driveApi";
 
 const SIDEBAR_SCROLL_HEIGHT = "calc(100vh - 280px)";
-const YEAR_RE = /^\d{4}$/;
 
 type AlbumSidebarProps = {
   albums: DriveFileInfo[];
@@ -89,9 +88,9 @@ export function AlbumSidebar({
     const groups = new Map<string, DriveFileInfo[]>();
     const ungroupedList: DriveFileInfo[] = [];
     for (const album of albums) {
-      if (YEAR_RE.test(album.name)) {
-        if (!groups.has(album.name)) groups.set(album.name, []);
-        groups.get(album.name)!.push(album);
+      if (album.year) {
+        if (!groups.has(album.year)) groups.set(album.year, []);
+        groups.get(album.year)!.push(album);
       } else {
         ungroupedList.push(album);
       }
