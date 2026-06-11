@@ -1,4 +1,5 @@
 import {
+  Anchor,
   Avatar,
   Box,
   Button,
@@ -22,17 +23,33 @@ type AppLayoutProps = {
   children: ReactNode;
 };
 
-export default function AppLayout({
-  user,
-  onLogout,
-  children,
-}: AppLayoutProps) {
+function NavLink({ to, active, children }: { to: string; active: boolean; children: ReactNode }) {
+  return (
+    <Anchor
+      component={Link}
+      to={to}
+      underline="never"
+      fw={active ? 600 : 500}
+      size="sm"
+      style={{
+        color: active ? "var(--mantine-color-brand-6)" : "var(--mantine-color-dimmed)",
+        paddingBottom: 4,
+        borderBottom: `2px solid ${active ? "var(--mantine-color-brand-6)" : "transparent"}`,
+        transition: "color 0.15s ease, border-color 0.15s ease",
+      }}
+    >
+      {children}
+    </Anchor>
+  );
+}
+
+export default function AppLayout({ user, onLogout, children }: AppLayoutProps) {
   const location = useLocation();
   const elevated = isElevated(user.authorities);
 
   return (
     <AppShell header={{ height: 64 }}>
-      <AppShell.Header>
+      <AppShell.Header className="glass-header">
         <Container size="xl" h="100%">
           <Group justify="space-between" align="center" h="100%">
             <Group gap="md">
@@ -41,42 +58,37 @@ export default function AppLayout({
               </ThemeIcon>
 
               <Box>
-                <Title order={3} c="brand.8" style={{ lineHeight: 1.1 }}>
-                  Photo AI Search
+                <Title
+                  order={3}
+                  style={{
+                    lineHeight: 1.1,
+                    background: "linear-gradient(135deg, #7114ef 0%, #a76ef4 100%)",
+                    WebkitBackgroundClip: "text",
+                    WebkitTextFillColor: "transparent",
+                    backgroundClip: "text",
+                  }}
+                >
+                  Photo Search
                 </Title>
                 <Text size="xs" c="dimmed">
-                  Google Drive integration
+                  From Google Drive
                 </Text>
               </Box>
             </Group>
 
-            <Group gap="xs">
-              <Button
-                component={Link}
-                to="/"
-                variant={location.pathname === "/" ? "filled" : "subtle"}
-              >
+            <Group gap="lg">
+              <NavLink to="/" active={location.pathname === "/"}>
                 Gallery
-              </Button>
-
+              </NavLink>
               {elevated && (
-                <Button
-                  component={Link}
-                  to="/admin"
-                  variant={location.pathname === "/admin" ? "filled" : "subtle"}
-                >
+                <NavLink to="/admin" active={location.pathname === "/admin"}>
                   Admin
-                </Button>
+                </NavLink>
               )}
-
               {elevated && (
-                <Button
-                  component={Link}
-                  to="/users"
-                  variant={location.pathname === "/users" ? "filled" : "subtle"}
-                >
+                <NavLink to="/users" active={location.pathname === "/users"}>
                   Users
-                </Button>
+                </NavLink>
               )}
             </Group>
 
@@ -111,7 +123,7 @@ export default function AppLayout({
           <Container size="xl" py="md">
             <Group justify="space-between">
               <Text size="sm" c="dimmed">
-                Photo AI Search
+                Photo Search
               </Text>
               <Group gap="xs">
                 <Text size="xs" c="dimmed">
@@ -119,7 +131,7 @@ export default function AppLayout({
                 </Text>
                 <Divider orientation="vertical" />
                 <Text size="xs" c="brand.6" fw={500}>
-                  Thesis Project
+                  made with ♥ by George
                 </Text>
               </Group>
             </Group>

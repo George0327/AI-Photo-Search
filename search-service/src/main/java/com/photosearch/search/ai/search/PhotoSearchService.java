@@ -28,7 +28,8 @@ public class PhotoSearchService {
         AiSearchResponse aiResponse = aiServiceClient.search(query, aiTopK, selectedAlbumIds);
 
         if (aiResponse == null) throw new IllegalStateException("No response from AI service");
-        if (!aiResponse.success()) return new PhotoSearchResponse(query, topK, selectedAlbumIds, List.of());
+        if (!aiResponse.success() || aiResponse.results() == null || aiResponse.results().isEmpty())
+            return new PhotoSearchResponse(query, topK, selectedAlbumIds, List.of());
 
         List<String> driveFileIds = aiResponse.results().stream()
                 .map(AiSearchResult::itemId).distinct().toList();

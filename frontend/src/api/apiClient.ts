@@ -4,6 +4,16 @@ export function dispatchSessionExpired() {
   window.dispatchEvent(new Event("session-expired"));
 }
 
+export async function extractErrorMessage(response: Response): Promise<string> {
+  try {
+    const body = await response.json();
+    if (body && typeof body.error === "string" && body.error.length > 0) {
+      return body.error;
+    }
+  } catch {}
+  return `Request failed: ${response.status} ${response.statusText}`;
+}
+
 export async function fetchJson<T>(url: string): Promise<T> {
   const response = await fetch(`${BASE_URL}${url}`, { credentials: "include" });
 
@@ -13,7 +23,7 @@ export async function fetchJson<T>(url: string): Promise<T> {
   }
 
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status} ${response.statusText}`);
+    throw new Error(await extractErrorMessage(response));
   }
 
   const contentType = response.headers.get("content-type");
@@ -33,7 +43,7 @@ export async function postJson<T>(url: string): Promise<T> {
   }
 
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status} ${response.statusText}`);
+    throw new Error(await extractErrorMessage(response));
   }
 
   const contentType = response.headers.get("content-type");
@@ -58,7 +68,7 @@ export async function patchJson<T>(url: string, body: unknown): Promise<T> {
   }
 
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status} ${response.statusText}`);
+    throw new Error(await extractErrorMessage(response));
   }
 
   const contentType = response.headers.get("content-type");

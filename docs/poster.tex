@@ -1,0 +1,356 @@
+% ============================================================
+% Photo Search - Thesis Poster
+% Compile with: pdflatex poster.tex  (run twice for TikZ)
+%
+% Required packages (MiKTeX: install on demand / TeX Live: full install):
+%   beamerposter, tikz, booktabs, tabularx, amssymb
+% ============================================================
+\documentclass[final]{beamer}
+
+\usepackage[size=a0,orientation=landscape,scale=1.24]{beamerposter}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{tikz}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{xcolor}
+\usepackage{lmodern}
+
+\usetikzlibrary{arrows.meta, positioning, fit, backgrounds, shapes.geometric}
+
+% -------------------------------------------------------
+% Colours  (matching the app's Mantine brand palette)
+% -------------------------------------------------------
+\definecolor{brandpurple}{HTML}{7950F2}
+\definecolor{brandmid}{HTML}{9775FA}
+\definecolor{brandlight}{HTML}{F3F0FF}
+\definecolor{darktext}{HTML}{2C2E33}
+\definecolor{medgray}{HTML}{868E96}
+\definecolor{aigreen}{HTML}{2F9E44}
+\definecolor{ailight}{HTML}{EBFBEE}
+\definecolor{extgray}{HTML}{495057}
+\definecolor{extlight}{HTML}{F8F9FA}
+
+% -------------------------------------------------------
+% Beamer theme
+% -------------------------------------------------------
+\usetheme{default}
+\setbeamercolor{background canvas}{bg=white}
+\setbeamercolor{block title}{fg=white, bg=brandpurple}
+\setbeamercolor{block body}{fg=darktext, bg=white}
+\setbeamercolor{headline}{fg=white, bg=brandpurple}
+\setbeamercolor{footline}{fg=white, bg=darktext}
+\setbeamerfont{block title}{size=\large, series=\bfseries}
+\setbeamerfont{block body}{size=\normalsize}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{itemize items}{\textcolor{brandpurple}{\small$\blacktriangleright$}}
+\setbeamertemplate{enumerate items}{\textcolor{brandpurple}{\textbf{\insertenumlabel.}}}
+\setbeamersize{text margin left=3cm, text margin right=3cm}
+
+% -------------------------------------------------------
+% Headline
+% -------------------------------------------------------
+\setbeamertemplate{headline}{%
+  \begin{beamercolorbox}[wd=\paperwidth, ht=9cm, dp=0cm,
+                         leftskip=3.5cm, rightskip=3.5cm]{headline}
+    \vskip1.4cm
+    {\fontsize{58}{66}\selectfont\bfseries\color{white}%
+      Photo Search: AI-Powered Semantic Image Retrieval from Google Drive}\par\vskip0.3ex
+    {\fontsize{28}{34}\selectfont\color{white!90}%
+      George Marinescu
+      \hspace{0.8cm}\textbar\hspace{0.8cm}
+      Bachelor's Thesis \textbullet{} 2026
+      \hspace{0.8cm}\textbar\hspace{0.8cm}
+      Technical University of Cluj-Napoca}
+    \vskip1.4cm
+  \end{beamercolorbox}%
+}
+
+% -------------------------------------------------------
+% Footline
+% -------------------------------------------------------
+\setbeamertemplate{footline}{%
+  \begin{beamercolorbox}[wd=\paperwidth, ht=3cm, dp=2cm,
+                         leftskip=3.5cm, rightskip=3.5cm]{footline}
+    \vskip1.5cm
+    \large George Marinescu
+    \hfill
+    Photo Search \textbullet{} Bachelor's Thesis, 2026
+    \hfill
+    Technical University of Cluj-Napoca\par
+  \end{beamercolorbox}%
+}
+
+% -------------------------------------------------------
+% Document
+% -------------------------------------------------------
+\begin{document}
+\begin{frame}[t]
+\vskip1.5cm
+
+\begin{columns}[t]
+
+% ============================================================
+% COLUMN 1 - Introduction
+% ============================================================
+\begin{column}{0.29\linewidth}
+
+\begin{block}{Introduction \& Motivation}
+Large photo libraries are difficult to search by \textbf{visual content}.
+Traditional tools rely on filenames and metadata, requiring manual tagging
+that does not scale.
+
+\medskip
+\textbf{BEST Cluj-Napoca}, a student organisation, accumulates \textbf{thousands of
+event photos} per year across Google Drive. Locating photos of a specific person,
+logo, or scene is a slow, manual process.
+
+\medskip
+This project builds a \textbf{full-stack semantic photo search engine} that
+understands image content using state-of-the-art AI models, without
+requiring any manual tagging.
+\end{block}
+
+\vskip1.4ex
+
+\begin{block}{Problem Statement}
+\begin{itemize}
+  \item Keyword search fails for visual content queries
+  \item Manual tagging is impractical at the scale of thousands of photos
+  \item No unified tool covers semantic, face, and logo search simultaneously
+  \item Photos scattered across dozens of Google Drive albums
+\end{itemize}
+\end{block}
+
+\vskip1.4ex
+
+\begin{block}{Research Objectives}
+\begin{enumerate}
+  \item Design a scalable microservices backend with Google Drive integration
+  \item Implement three AI search modalities: text, face, and logo
+  \item Build an intuitive web interface for non-technical users
+  \item Enable real-time incremental indexing of new albums
+\end{enumerate}
+\end{block}
+
+\vskip1.4ex
+
+\begin{block}{AI Models}
+\renewcommand{\arraystretch}{1.55}
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+\textbf{Model} & \textbf{Role} \\
+\midrule
+CLIP (OpenAI)    & Shared text $\leftrightarrow$ image embedding space \\
+FAISS (Meta AI)  & Billion-scale approximate nearest-neighbour search \\
+InsightFace      & Face detection and biometric recognition \\
+OWL-ViT (Google) & Open-vocabulary object / logo detection \\
+\bottomrule
+\end{tabularx}
+\end{block}
+
+\vskip1.4ex
+
+\begin{block}{Technology Stack}
+\renewcommand{\arraystretch}{1.45}
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+\textbf{Layer} & \textbf{Technology} \\
+\midrule
+Frontend   & React 19, TypeScript, Mantine UI, Vite \\
+Backend    & Spring Boot 4, Java 17, Spring Security \\
+AI Service & Python 3.11, FastAPI, CLIP, FAISS, InsightFace \\
+Database   & PostgreSQL 16 \\
+Infra      & Docker Compose, Traefik v3, Oracle Cloud \\
+\bottomrule
+\end{tabularx}
+\end{block}
+
+\end{column}
+
+% ============================================================
+% COLUMN 2 — Architecture & Pipeline
+% ============================================================
+\begin{column}{0.38\linewidth}
+
+\begin{block}{System Architecture}
+\vskip0.6ex
+\centering
+\begin{tikzpicture}[
+  svc/.style = {rectangle, rounded corners=5pt,
+                draw=brandpurple, fill=brandlight,
+                text width=2.5cm, align=center,
+                font=\scriptsize\bfseries, minimum height=1.0cm, inner sep=4pt},
+  ai/.style  = {rectangle, rounded corners=5pt,
+                draw=aigreen, fill=ailight,
+                text width=2.5cm, align=center,
+                font=\scriptsize\bfseries, minimum height=1.0cm, inner sep=4pt},
+  ext/.style = {rectangle, rounded corners=5pt,
+                draw=extgray, fill=extlight,
+                text width=2.5cm, align=center,
+                font=\scriptsize\bfseries, minimum height=1.0cm, inner sep=4pt},
+  arr/.style = {-{Stealth[length=5pt,width=4pt]}, thick, color=medgray},
+  lbl/.style = {font=\scriptsize, color=medgray},
+]
+
+% Absolute positions - no relative overlap
+\node[ext] at ( 0.0,  0.0) (browser)  {Browser\\React + Vite};
+\node[svc] at ( 0.0, -4.25) (traefik)  {Traefik\\Reverse Proxy};
+\node[svc] at (-12.5, -8.5) (auth)     {Auth\\Service};
+\node[svc] at ( 0.0, -8.5) (indexing) {Indexing\\Service};
+\node[svc] at ( 12.5, -8.5) (search)   {Search\\Service};
+\node[ext, text width=3.5cm] at ( 0.0, -16.0) (pg)       {PostgreSQL};
+\node[ai]  at ( 6.5, -8.5) (aibox)    {AI Service\\FastAPI};
+\node[ai]  at ( 10.5, -12.5) (clip)     {CLIP};
+\node[ai]  at ( 6.5, -12.5) (faiss)    {FAISS};
+\node[ai, text width=3.5cm]  at ( 2.5, -12.5) (insf)     {InsightFace\\OWL-ViT};
+\node[ext, text width=4.5cm] at (-6.5, -8.5) (gdrive)   {Google Drive\\API};
+
+\draw[arr] (browser)  -- (traefik);
+\draw[arr] (traefik)  -| (auth);
+\draw[arr] (traefik)  -- (indexing);
+\draw[arr] (traefik)  -| (search);
+\draw[arr] (auth)     |- (pg);
+\draw[arr] (indexing) -- (pg);
+\draw[arr] (search)   |- (pg);
+\draw[arr] (indexing) -- (aibox);
+\draw[arr] (search)   -- (aibox);
+\draw[arr] (aibox)    -- (clip);
+\draw[arr] (aibox)    -- (faiss);
+\draw[arr] (aibox)    -- (insf);
+\draw[arr] (indexing) -- (gdrive);
+
+\begin{scope}[on background layer]
+  \node[draw=medgray!60, dashed, rounded corners=10pt, fill=gray!4,
+        fit=(traefik)(auth)(indexing)(search)(pg)(aibox)(clip)(faiss)(insf)(gdrive),
+        inner sep=10pt,
+        label={[lbl, yshift=-4pt]below:Docker Compose}] {};
+\end{scope}
+
+\end{tikzpicture}
+\vskip0.5ex
+\end{block}
+
+\vskip1.4ex
+
+\begin{block}{Demo}
+\vskip0.3ex
+\includegraphics[width=\linewidth]{screenshot.png}
+\vskip0.3ex
+\end{block}
+
+\vskip1.4ex
+
+\begin{block}{Search \& Indexing Pipeline}
+\vskip0.5ex
+\centering
+\begin{tikzpicture}[
+  node distance = 0.7cm,
+  pnode/.style = {rectangle, rounded corners=5pt,
+                  draw=brandpurple, fill=brandlight,
+                  text width=3.5cm, align=center,
+                  font=\scriptsize\bfseries, minimum height=1.1cm},
+  parr/.style  = {-{Stealth[length=5pt]}, thick, color=brandpurple!70},
+]
+
+\node[pnode, text width=5.5cm]               (q)    {Query\\(text / image)};
+\node[pnode, right=of q, text width=7.5cm]   (enc)  {Encoder\\CLIP / Face / OWL};
+\node[pnode, right=of enc, text width=5.5cm] (idx)  {FAISS\\Vector Index};
+\node[pnode, right=of idx] (rank) {Top-K Ranking};
+\node[pnode, right=of rank](res)  {Results\\+ Scores};
+
+\draw[parr] (q) -- (enc);
+\draw[parr] (enc) -- (idx);
+\draw[parr] (idx) -- (rank);
+\draw[parr] (rank) -- (res);
+\end{tikzpicture}
+\vskip0.3ex
+
+\medskip
+During \textbf{indexing}, each album's images are passed through the relevant AI encoder
+and the resulting vectors are stored in a persistent FAISS index on disk.
+At \textbf{query time}, only the query is encoded and compared against the pre-built
+index, enabling \textbf{sub-second search} across thousands of images.
+\end{block}
+
+\end{column}
+
+% ============================================================
+% COLUMN 3 — Features, Results, Conclusions
+% ============================================================
+\begin{column}{0.28\linewidth}
+
+\begin{block}{Search Modalities}
+
+\textbf{\textcolor{brandpurple}{1 \ Text Search}}\\
+Users describe a scene in natural language (e.g.\ \textit{"people on a boat at sunset"}).
+CLIP maps both the text and all indexed photos into a shared embedding space;
+FAISS retrieves the $k$ most similar images in milliseconds.
+
+\medskip
+\textbf{\textcolor{brandpurple}{2 \ Face Search}}\\
+Users upload one or more reference photos of a person.
+InsightFace extracts face embeddings and returns all indexed photos
+containing that individual, regardless of lighting or pose.
+
+\medskip
+\textbf{\textcolor{brandpurple}{3 \ Logo / Object Search}}\\
+OWL-ViT performs open-vocabulary object detection on reference images,
+enabling searches for brand logos, sponsor banners, or visual patterns
+without any domain-specific retraining.
+\end{block}
+
+\vskip1.4ex
+
+\begin{block}{Implementation Highlights}
+\begin{itemize}
+  \item \textbf{Microservices:} Auth, Indexing, Search independently deployable
+  \item \textbf{Google OAuth2:} role-based access (admin vs.\ viewer)
+  \item \textbf{Incremental indexing:} individual albums re-indexable without downtime
+  \item \textbf{Persistent FAISS:} indexes survive service restarts via Docker volumes
+  \item \textbf{Year-grouped UI:} albums organised by year with collapsible sections
+  \item \textbf{Single interface:} text, face, and logo search in one responsive page
+\end{itemize}
+\end{block}
+
+\vskip1.4ex
+
+\begin{block}{Conclusions}
+A fully functional AI-powered photo search system was designed,
+implemented, and deployed for real-world use:
+
+\medskip
+\begin{itemize}
+  \item[$\checkmark$] Three search modalities: semantic, biometric, visual pattern
+  \item[$\checkmark$] Microservices architecture with independent scalability
+  \item[$\checkmark$] End-to-end Google Drive integration for a real organisation
+  \item[$\checkmark$] Responsive web UI accessible to non-technical users
+  \item[$\checkmark$] Fully containerised, deployed on Oracle Cloud Always Free
+\end{itemize}
+
+\medskip
+\textbf{Future work:} automatic album tagging, video clip search, mobile app.
+\end{block}
+
+\vskip1.4ex
+
+\begin{block}{References}
+\small
+\begin{enumerate}
+  \item Radford~et~al., \textit{Learning Transferable Visual Models From
+        Natural Language Supervision}. ICML, 2021.
+  \item Johnson~et~al., \textit{Billion-scale similarity search with GPUs}.
+        IEEE Trans.\ Big Data, 2019.
+  \item Deng~et~al., \textit{ArcFace: Additive Angular Margin Loss for
+        Deep Face Recognition}. CVPR, 2019.
+  \item Minderer~et~al., \textit{Simple Open-Vocabulary Object Detection
+        with Vision Transformers}. ECCV, 2022.
+\end{enumerate}
+\end{block}
+
+\end{column}
+
+\end{columns}
+\end{frame}
+\end{document}

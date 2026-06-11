@@ -1,14 +1,57 @@
+html {
+  min-height: 100%;
+}
+
+/* Ambient mesh gradient — light mode */
+html[data-mantine-color-scheme="light"] {
+  background-color: #ffffff;
+  background-image:
+    radial-gradient(ellipse 70% 50% at 5% 0%, rgba(113, 20, 239, 0.09) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 40% at 95% 100%, rgba(139, 66, 240, 0.07) 0%, transparent 60%);
+}
+
+/* Ambient mesh gradient — dark mode */
+html[data-mantine-color-scheme="dark"] {
+  background-color: #1a1b1e;
+  background-image:
+    radial-gradient(ellipse 70% 50% at 5% 0%, rgba(113, 20, 239, 0.22) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 40% at 95% 100%, rgba(139, 66, 240, 0.15) 0%, transparent 60%);
+}
+
+/* Let the html gradient show through */
+body {
+  background-color: transparent !important;
+}
+
+/* Frosted glass header */
+.glass-header {
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+html[data-mantine-color-scheme="light"] .glass-header {
+  background: rgba(255, 255, 255, 0.78) !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.07) !important;
+}
+
+html[data-mantine-color-scheme="dark"] .glass-header {
+  background: rgba(26, 27, 30, 0.82) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+
+/* Photo card hover effects */
 .photo-card {
   transition:
     transform 0.2s ease,
-    box-shadow 0.2s ease;
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
   overflow: hidden;
   cursor: pointer;
 }
 
 .photo-card:hover {
   transform: translateY(-4px);
-  box-shadow: var(--mantine-shadow-md);
+  box-shadow: 0 12px 28px -6px rgba(113, 20, 239, 0.18), 0 4px 10px -3px rgba(113, 20, 239, 0.1);
   border-color: var(--mantine-color-brand-3);
 }
 

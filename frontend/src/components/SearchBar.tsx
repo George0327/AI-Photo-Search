@@ -2,7 +2,6 @@ import { useRef } from "react";
 import {
   Button,
   Group,
-  Kbd,
   Loader,
   SegmentedControl,
   Select,
@@ -77,14 +76,8 @@ export function SearchBar({
             leftSection={
               <IconSearch size={18} color="var(--mantine-color-gray-5)" />
             }
-            rightSection={
-              loading ? (
-                <Loader size="xs" color="brand" />
-              ) : (
-                <Kbd size="xs">↵ Enter</Kbd>
-              )
-            }
-            rightSectionWidth={70}
+            rightSection={loading ? <Loader size="xs" color="brand" /> : undefined}
+            rightSectionWidth={loading ? 40 : undefined}
             style={{ flex: 1 }}
           />
         ) : (
@@ -104,16 +97,14 @@ export function SearchBar({
           w={90}
         />
 
-        {mode !== "text" && (
-          <Button
-            size="md"
-            loading={loading}
-            disabled={referenceFiles.length === 0}
-            onClick={onSearch}
-          >
-            Search
-          </Button>
-        )}
+        <Button
+          size="md"
+          loading={loading}
+          disabled={mode === "text" ? value.trim().length === 0 : referenceFiles.length === 0}
+          onClick={onSearch}
+        >
+          Search
+        </Button>
 
         {searchActive && (
           <Button size="md" variant="light" color="gray" onClick={onClear}>

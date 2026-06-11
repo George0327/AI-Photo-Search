@@ -85,7 +85,7 @@ export function PhotoGrid({
                   key={image.id}
                   className="photo-card"
                   padding="xs"
-                  radius="sm"
+                  radius="md"
                   withBorder
                   role="button"
                   tabIndex={0}

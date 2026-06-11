@@ -1,4 +1,6 @@
+import { useMemo } from "react";
 import {
+  Accordion,
   Badge,
   Button,
   Center,
@@ -16,6 +18,7 @@ import { IconPhoto } from "@tabler/icons-react";
 import type { DriveFileInfo } from "../api/driveApi";
 
 const SIDEBAR_SCROLL_HEIGHT = "calc(100vh - 280px)";
+const YEAR_RE = /^\d{4}$/;
 
 type AlbumSidebarProps = {
   albums: DriveFileInfo[];
@@ -28,6 +31,50 @@ type AlbumSidebarProps = {
   onClearSearchSelection: () => void;
 };
 
+type AlbumRowProps = {
+  album: DriveFileInfo;
+  isBrowsing: boolean;
+  checkedForSearch: boolean;
+  onSelectAlbum: (album: DriveFileInfo) => void;
+  onSearchAlbumToggle: (albumId: string, checked: boolean) => void;
+};
+
+function AlbumRow({ album, isBrowsing, checkedForSearch, onSelectAlbum, onSearchAlbumToggle }: AlbumRowProps) {
+  return (
+    <Group
+      gap="xs"
+      wrap="nowrap"
+      p="xs"
+      style={{
+        borderRadius: "var(--mantine-radius-sm)",
+        borderLeft: `3px solid ${isBrowsing ? "var(--mantine-color-brand-filled)" : "transparent"}`,
+        background: isBrowsing ? "var(--mantine-color-brand-light)" : "transparent",
+        cursor: "default",
+      }}
+    >
+      <Group
+        gap="xs"
+        wrap="nowrap"
+        style={{ flex: 1, minWidth: 0, cursor: "pointer" }}
+        onClick={() => onSelectAlbum(album)}
+      >
+        <ThemeIcon size="sm" variant="transparent" color={isBrowsing ? "brand" : "gray"}>
+          <IconPhoto size={14} />
+        </ThemeIcon>
+        <Text size="sm" truncate="end" fw={isBrowsing ? 600 : 400} c={isBrowsing ? "brand" : undefined}>
+          {album.name}
+        </Text>
+      </Group>
+      <Checkbox
+        checked={checkedForSearch}
+        aria-label={album.name}
+        size="xs"
+        onChange={(e) => onSearchAlbumToggle(album.id, e.currentTarget.checked)}
+      />
+    </Group>
+  );
+}
+
 export function AlbumSidebar({
   albums,
   albumsLoading,
@@ -38,6 +85,21 @@ export function AlbumSidebar({
   onSelectAllForSearch,
   onClearSearchSelection,
 }: AlbumSidebarProps) {
+  const { yearGroups, sortedYears, ungrouped } = useMemo(() => {
+    const groups = new Map<string, DriveFileInfo[]>();
+    const ungroupedList: DriveFileInfo[] = [];
+    for (const album of albums) {
+      if (YEAR_RE.test(album.name)) {
+        if (!groups.has(album.name)) groups.set(album.name, []);
+        groups.get(album.name)!.push(album);
+      } else {
+        ungroupedList.push(album);
+      }
+    }
+    const years = [...groups.keys()].sort((a, b) => b.localeCompare(a));
+    return { yearGroups: groups, sortedYears: years, ungrouped: ungroupedList };
+  }, [albums]);
+
   return (
     <Paper withBorder radius="md" p="md" h="100%">
       <Stack gap="md">
@@ -78,59 +140,67 @@ export function AlbumSidebar({
           </Center>
         ) : (
           <ScrollArea h={SIDEBAR_SCROLL_HEIGHT} offsetScrollbars>
-            <Stack gap={4}>
-              {albums.map((album) => {
-                const checkedForSearch = selectedSearchAlbumIds.includes(album.id);
-                const isBrowsing = selectedAlbum?.id === album.id;
-                return (
-                  <Group
+            {ungrouped.length > 0 && (
+              <Stack gap={4} mb={sortedYears.length > 0 ? "xs" : 0}>
+                {ungrouped.map((album) => (
+                  <AlbumRow
                     key={album.id}
-                    gap="xs"
-                    wrap="nowrap"
-                    p="xs"
-                    style={{
-                      borderRadius: "var(--mantine-radius-sm)",
-                      borderLeft: `3px solid ${isBrowsing ? "var(--mantine-color-brand-filled)" : "transparent"}`,
-                      background: isBrowsing
-                        ? "var(--mantine-color-brand-light)"
-                        : "transparent",
-                      cursor: "default",
-                    }}
-                  >
-                    <Group
-                      gap="xs"
-                      wrap="nowrap"
-                      style={{ flex: 1, minWidth: 0, cursor: "pointer" }}
-                      onClick={() => onSelectAlbum(album)}
-                    >
-                      <ThemeIcon
-                        size="sm"
-                        variant="transparent"
-                        color={isBrowsing ? "brand" : "gray"}
-                      >
-                        <IconPhoto size={14} />
-                      </ThemeIcon>
-                      <Text
-                        size="sm"
-                        truncate="end"
-                        fw={isBrowsing ? 600 : 400}
-                        c={isBrowsing ? "brand" : undefined}
-                      >
-                        {album.name}
-                      </Text>
-                    </Group>
-                    <Checkbox
-                      checked={checkedForSearch}
-                      aria-label={album.name}
-                      size="xs"
-                      onChange={(e) =>
-                        onSearchAlbumToggle(album.id, e.currentTarget.checked)
-                      }
-                    />
-                  </Group>
-                );
-              })}
-            </Stack>
+                    album={album}
+                    isBrowsing={selectedAlbum?.id === album.id}
+                    checkedForSearch={selectedSearchAlbumIds.includes(album.id)}
+                    onSelectAlbum={onSelectAlbum}
+                    onSearchAlbumToggle={onSearchAlbumToggle}
+                  />
+                ))}
+              </Stack>
+            )}
+
+            {sortedYears.length > 0 && (
+              <Accordion
+                multiple
+                defaultValue={sortedYears}
+                chevronPosition="left"
+                styles={{
+                  item: { borderBottom: "none" },
+                  control: { paddingLeft: 4, paddingRight: 4, paddingTop: 4, paddingBottom: 4 },
+                  panel: { paddingLeft: 0, paddingRight: 0 },
+                  content: { padding: 0 },
+                }}
+              >
+                {sortedYears.map((year) => (
+                  <Accordion.Item key={year} value={year}>
+                    <Accordion.Control>
+                      <Text size="sm" fw={600}>{year}</Text>
+                    </Accordion.Control>
+                    <Accordion.Panel>
+                      <Stack gap={4}>
+                        {yearGroups.get(year)!.map((album) => (
+                          <AlbumRow
+                            key={album.id}
+                            album={album}
+                            isBrowsing={selectedAlbum?.id === album.id}
+                            checkedForSearch={selectedSearchAlbumIds.includes(album.id)}
+                            onSelectAlbum={onSelectAlbum}
+                            onSearchAlbumToggle={onSearchAlbumToggle}
+                          />
+                        ))}
+                      </Stack>
+                    </Accordion.Panel>
+                  </Accordion.Item>
+                ))}
+              </Accordion>
+            )}
+
+            {albums.length === 0 && (
+              <Center py="xl">
+                <Stack align="center" gap="xs">
+                  <ThemeIcon size={40} radius="xl" variant="light" color="gray">
+                    <IconPhoto size={20} />
+                  </ThemeIcon>
+                  <Text size="sm" c="dimmed" ta="center">No albums found.</Text>
+                </Stack>
+              </Center>
+            )}
           </ScrollArea>
         )}
       </Stack>

@@ -79,7 +79,23 @@ export function useAdminIndexing() {
       if (data.failures.length > 0) setFailures(data.failures);
       await loadAlbumStatuses();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Operation failed.");
+      const msg = err instanceof Error ? err.message : "";
+      const isTimeout =
+        msg.includes("504") ||
+        msg.includes("502") ||
+        msg.toLowerCase().includes("failed to fetch");
+
+      if (isTimeout) {
+        notifications.show({
+          title: "Connection timed out",
+          message: "The operation may have completed in the background. Refreshing status...",
+          color: "yellow",
+          autoClose: 8000,
+        });
+        await loadAlbumStatuses();
+      } else {
+        setError(msg || "Operation failed.");
+      }
     } finally {
       stopLoading();
     }

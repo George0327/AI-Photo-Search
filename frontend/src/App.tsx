@@ -31,6 +31,8 @@ export default function App() {
       setLoading(true);
       const currentUser = await fetchCurrentUser();
       setUser(currentUser);
+    } catch {
+      setUser(null);
     } finally {
       setLoading(false);
     }

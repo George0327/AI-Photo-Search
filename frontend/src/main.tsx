@@ -7,6 +7,7 @@ import "@mantine/notifications/styles.css";
 import "./index.css";
 
 import App from "./App";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 const theme = createTheme({
   primaryColor: "brand",
@@ -39,7 +40,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <MantineProvider theme={theme} defaultColorScheme="auto">
       <Notifications />
-      <App />
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
     </MantineProvider>
   </React.StrictMode>,
 );

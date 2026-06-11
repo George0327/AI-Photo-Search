@@ -7,35 +7,62 @@ import com.photosearch.indexing.drive.GoogleDriveService;
 import com.photosearch.indexing.media.IndexingStatus;
 import com.photosearch.indexing.media.MediaItem;
 import com.photosearch.indexing.media.MediaItemRepository;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
-@RequiredArgsConstructor
 public class MediaItemIndexingService {
 
     private final GoogleDriveService googleDriveService;
     private final AiServiceClient aiServiceClient;
     private final MediaItemRepository mediaItemRepository;
+    private final Executor indexingExecutor;
 
-    public MediaIndexingResult indexMediaItems(Album album, List<MediaItem> mediaItems) {
-        int indexedCount = 0;
-        List<DriveIndexFailure> failures = new ArrayList<>();
-
-        for (MediaItem mediaItem : mediaItems) {
-            if (indexSingleMediaItem(album, mediaItem, failures)) indexedCount++;
-        }
-        return new MediaIndexingResult(indexedCount, failures);
+    public MediaItemIndexingService(GoogleDriveService googleDriveService,
+                                    AiServiceClient aiServiceClient,
+                                    MediaItemRepository mediaItemRepository,
+                                    @Qualifier("indexingExecutor") Executor indexingExecutor) {
+        this.googleDriveService = googleDriveService;
+        this.aiServiceClient = aiServiceClient;
+        this.mediaItemRepository = mediaItemRepository;
+        this.indexingExecutor = indexingExecutor;
     }
 
-    private boolean indexSingleMediaItem(Album album, MediaItem mediaItem, List<DriveIndexFailure> failures) {
+    public MediaIndexingResult indexMediaItems(Album album, List<MediaItem> mediaItems) {
+        String albumFolderId = album.getDriveFolderId();
+        AtomicInteger indexedCount = new AtomicInteger(0);
+        CopyOnWriteArrayList<DriveIndexFailure> failures = new CopyOnWriteArrayList<>();
+
+        List<CompletableFuture<Void>> futures = mediaItems.stream()
+                .map(item -> {
+                    String fileId = item.getDriveFileId();
+                    String filename = item.getFilename();
+                    String mimeType = item.getMimeType();
+                    return CompletableFuture.runAsync(() -> {
+                        if (indexSingleMediaItem(albumFolderId, item, fileId, filename, mimeType, failures)) {
+                            indexedCount.incrementAndGet();
+                        }
+                    }, indexingExecutor);
+                })
+                .toList();
+
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+        return new MediaIndexingResult(indexedCount.get(), failures);
+    }
+
+    private boolean indexSingleMediaItem(String albumFolderId, MediaItem mediaItem,
+                                         String fileId, String filename, String mimeType,
+                                         List<DriveIndexFailure> failures) {
         try {
             if (mediaItem.isDeletedInDrive()) {
-                failures.add(new DriveIndexFailure(mediaItem.getDriveFileId(), mediaItem.getFilename(),
+                failures.add(new DriveIndexFailure(fileId, filename,
                         "Skipped: media item is marked deleted in Drive."));
                 return false;
             }
@@ -43,15 +70,13 @@ public class MediaItemIndexingService {
             mediaItem.setIndexingError(null);
             mediaItemRepository.save(mediaItem);
 
-            byte[] imageBytes = googleDriveService.downloadFileBytes(mediaItem.getDriveFileId());
+            byte[] imageBytes = googleDriveService.downloadFileBytes(fileId);
             AiIndexResponse response = aiServiceClient.indexAlbumImage(
-                    album.getDriveFolderId(), mediaItem.getDriveFileId(),
-                    mediaItem.getFilename(), mediaItem.getMimeType(), imageBytes);
+                    albumFolderId, fileId, filename, mimeType, imageBytes);
 
             if (response == null || !response.success()) {
                 String error = response != null ? response.message() : "No response from AI service.";
-                markFailed(mediaItem, error);
-                failures.add(new DriveIndexFailure(mediaItem.getDriveFileId(), mediaItem.getFilename(), error));
+                markFailed(mediaItem, fileId, filename, error, failures);
                 return false;
             }
 
@@ -61,15 +86,16 @@ public class MediaItemIndexingService {
             mediaItemRepository.save(mediaItem);
             return true;
         } catch (Exception e) {
-            markFailed(mediaItem, e.getMessage());
-            failures.add(new DriveIndexFailure(mediaItem.getDriveFileId(), mediaItem.getFilename(), e.getMessage()));
+            markFailed(mediaItem, fileId, filename, e.getMessage(), failures);
             return false;
         }
     }
 
-    private void markFailed(MediaItem mediaItem, String error) {
+    private void markFailed(MediaItem mediaItem, String fileId, String filename,
+                             String error, List<DriveIndexFailure> failures) {
         mediaItem.setIndexingStatus(IndexingStatus.FAILED);
         mediaItem.setIndexingError(error);
         mediaItemRepository.save(mediaItem);
+        failures.add(new DriveIndexFailure(fileId, filename, error));
     }
 }

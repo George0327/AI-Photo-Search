@@ -11,8 +11,6 @@ import com.photosearch.indexing.sync.SyncRun;
 import com.photosearch.indexing.sync.SyncType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -119,7 +117,6 @@ public class DriveAiIndexingService {
         }
     }
 
-    @Transactional
     private void resetMediaIndexingState(List<MediaItem> mediaItems) {
         for (MediaItem mediaItem : mediaItems) {
             mediaItem.setIndexingStatus(IndexingStatus.NOT_INDEXED);

@@ -33,10 +33,11 @@ export function loginWithGoogle() {
 }
 
 export async function logout() {
-  await fetch(`${BASE_URL}/api/auth/logout`, {
-    method: "POST",
-    credentials: "include",
-  });
-
+  try {
+    await fetch(`${BASE_URL}/api/auth/logout`, {
+      method: "POST",
+      credentials: "include",
+    });
+  } catch {}
   window.location.href = "/";
 }

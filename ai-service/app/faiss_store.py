@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 
 import faiss
@@ -40,8 +41,19 @@ class FaissStore:
         return results
 
     def save(self, index_path: str | Path, items_path: str | Path) -> None:
-        faiss.write_index(self.index, str(index_path))
-        Path(items_path).write_text(json.dumps(self.items, indent=2), encoding="utf-8")
+        index_path = Path(index_path)
+        items_path = Path(items_path)
+        tmp_index = index_path.with_suffix(".tmp")
+        tmp_items = items_path.with_suffix(".tmp")
+        try:
+            faiss.write_index(self.index, str(tmp_index))
+            tmp_items.write_text(json.dumps(self.items, indent=2), encoding="utf-8")
+            os.replace(tmp_index, index_path)
+            os.replace(tmp_items, items_path)
+        except Exception:
+            tmp_index.unlink(missing_ok=True)
+            tmp_items.unlink(missing_ok=True)
+            raise
 
     @classmethod
     def load(cls, index_path: str | Path, items_path: str | Path) -> "FaissStore":

@@ -70,7 +70,7 @@ class LogoRegionDetector:
             x2, y2 = min(w, x2), min(h, y2)
 
             # Skip degenerate boxes (too small to be meaningful logos)
-            if x2 <= x1 or y2 <= y1 or (x2 - x1) * (y2 - y1) < 400:
+            if x2 <= x1 or y2 <= y1 or (x2 - x1) * (y2 - y1) < 1600:
                 continue
 
             regions.append({"bbox": [x1, y1, x2, y2], "confidence": float(score)})

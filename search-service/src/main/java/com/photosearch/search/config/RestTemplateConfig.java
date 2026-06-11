@@ -17,4 +17,12 @@ public class RestTemplateConfig {
         factory.setReadTimeout((int) Duration.ofSeconds(120).toMillis());
         return new RestTemplate(factory);
     }
+
+    @Bean(name = "authRestTemplate")
+    public RestTemplate authRestTemplate() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout((int) Duration.ofSeconds(5).toMillis());
+        factory.setReadTimeout((int) Duration.ofSeconds(5).toMillis());
+        return new RestTemplate(factory);
+    }
 }
