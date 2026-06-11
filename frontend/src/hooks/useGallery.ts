@@ -3,7 +3,6 @@ import type { DriveFileInfo } from "../api/driveApi";
 import { fetchAlbums, fetchImages } from "../api/driveApi";
 import { searchPhotos } from "../api/searchApi";
 import { searchByFace } from "../api/faceSearchApi";
-import { searchByLogo } from "../api/logoSearchApi";
 import type { SearchMode } from "../components/SearchBar";
 
 const PHOTOS_PER_PAGE = 20;
@@ -13,7 +12,6 @@ export type SearchResult = { score: number; albumId: string; file: DriveFileInfo
 const SEARCH_LABELS: Record<SearchMode, string> = {
   text: "AI search results",
   face: "Face search results",
-  logo: "Logo search results",
 };
 
 export function useGallery() {
@@ -142,17 +140,10 @@ export function useGallery() {
       setSearchLoading(true);
       setActivePage(1);
 
-      if (inputMode === "face") {
-        const data = await searchByFace(referenceFiles, selectedSearchAlbumIds, Number(topK));
-        setSearchResults(data.results);
-        setActiveSearchType("face");
-        setLastSearchQuery(`${referenceFiles.length} reference photo${referenceFiles.length > 1 ? "s" : ""}`);
-      } else {
-        const data = await searchByLogo(referenceFiles, selectedSearchAlbumIds, Number(topK));
-        setSearchResults(data.results);
-        setActiveSearchType("logo");
-        setLastSearchQuery(`${referenceFiles.length} reference photo${referenceFiles.length > 1 ? "s" : ""}`);
-      }
+      const data = await searchByFace(referenceFiles, selectedSearchAlbumIds, Number(topK));
+      setSearchResults(data.results);
+      setActiveSearchType("face");
+      setLastSearchQuery(`${referenceFiles.length} reference photo${referenceFiles.length > 1 ? "s" : ""}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Search failed.");
     } finally {
@@ -163,8 +154,7 @@ export function useGallery() {
   function headerTitle() {
     if (!isSearchActive) return selectedAlbum?.name || "Select an album";
     if (activeSearchType === "text") return `Results for "${lastSearchQuery}"`;
-    if (activeSearchType === "face") return `Face search — ${lastSearchQuery}`;
-    return `Logo search — ${lastSearchQuery}`;
+    return `Face search — ${lastSearchQuery}`;
   }
 
   function headerSubtitle() {

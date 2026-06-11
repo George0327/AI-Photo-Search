@@ -179,7 +179,7 @@ export function useAdminIndexing() {
       setIndexingFacesAlbumId(null);
   }, [albums]);
 
-  // Poll every 3 seconds while any album is actively indexing (CLIP, faces, or logos)
+  // Poll every 3 seconds while any album is actively indexing (CLIP or faces)
   useEffect(() => {
     const isPolling = albums.some(a => a.indexingImages || a.indexingFaces);
     if (!isPolling) return;

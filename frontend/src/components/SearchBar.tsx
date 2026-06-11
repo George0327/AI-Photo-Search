@@ -12,7 +12,7 @@ import { useHotkeys } from "@mantine/hooks";
 import { IconSearch } from "@tabler/icons-react";
 import { ReferenceImageUpload } from "./ReferenceImageUpload";
 
-export type SearchMode = "text" | "face" | "logo";
+export type SearchMode = "text" | "face";
 
 export const TOP_K_OPTIONS = ["10", "20", "50", "100"];
 
@@ -58,7 +58,6 @@ export function SearchBar({
           data={[
             { label: "Text", value: "text" },
             { label: "Face", value: "face" },
-            { label: "Logo", value: "logo" },
           ]}
         />
       </Group>
@@ -69,7 +68,7 @@ export function SearchBar({
             ref={inputRef}
             size="md"
             radius="md"
-            placeholder='Describe a photo (e.g., "dog playing in the park")'
+            placeholder='Describe a photo (e.g., "people at a picnic")'
             value={value}
             onChange={(e) => onChange(e.currentTarget.value)}
             onKeyDown={(e) => e.key === "Enter" && onSearch()}
@@ -84,7 +83,7 @@ export function SearchBar({
           <ReferenceImageUpload
             files={referenceFiles}
             onFilesChange={onReferenceFilesChange}
-            label={mode === "face" ? "photos of the person" : "photos of the logo"}
+            label="photos of the person"
           />
         )}
 

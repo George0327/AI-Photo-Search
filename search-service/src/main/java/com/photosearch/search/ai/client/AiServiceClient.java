@@ -42,14 +42,6 @@ public class AiServiceClient {
                 AiFaceSearchResponse.class);
     }
 
-    public AiLogoSearchResponse searchByLogo(
-            List<byte[]> referenceImages, List<String> fileNames,
-            List<String> albumIds, int topK) {
-        return restTemplate.postForObject(properties.getBaseUrl() + "/search/logos",
-                buildDetectionSearchRequest(referenceImages, fileNames, albumIds, topK),
-                AiLogoSearchResponse.class);
-    }
-
     private HttpEntity<MultiValueMap<String, Object>> buildDetectionSearchRequest(
             List<byte[]> referenceImages, List<String> fileNames,
             List<String> albumIds, int topK) {
