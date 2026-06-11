@@ -3,8 +3,8 @@ import {
   Button,
   Group,
   Loader,
+  NumberInput,
   SegmentedControl,
-  Select,
   Stack,
   TextInput,
 } from "@mantine/core";
@@ -14,7 +14,6 @@ import { ReferenceImageUpload } from "./ReferenceImageUpload";
 
 export type SearchMode = "text" | "face";
 
-export const TOP_K_OPTIONS = ["10", "20", "50", "100"];
 
 type SearchBarProps = {
   mode: SearchMode;
@@ -87,12 +86,13 @@ export function SearchBar({
           />
         )}
 
-        <Select
+        <NumberInput
           size="md"
           radius="md"
-          value={topK}
-          onChange={(val) => onTopKChange(val ?? "10")}
-          data={TOP_K_OPTIONS}
+          value={Number(topK)}
+          onChange={(val) => onTopKChange(String(val || 10))}
+          min={1}
+          step={10}
           w={90}
         />
 
