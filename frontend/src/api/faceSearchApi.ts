@@ -1,4 +1,4 @@
-import { BASE_URL, dispatchSessionExpired, extractErrorMessage } from "./apiClient";
+import { postFormData } from "./apiClient";
 import type { DriveFileInfo } from "./driveApi";
 
 export type FaceSearchResult = {
@@ -27,20 +27,5 @@ export async function searchByFace(
   }
   formData.append("topK", String(topK));
 
-  const response = await fetch(`${BASE_URL}/api/search/faces`, {
-    method: "POST",
-    credentials: "include",
-    body: formData,
-  });
-
-  if (response.status === 401) {
-    dispatchSessionExpired();
-    throw new Error("Session expired");
-  }
-
-  if (!response.ok) {
-    throw new Error(await extractErrorMessage(response));
-  }
-
-  return response.json();
+  return postFormData<FaceSearchResponse>("/api/search/faces", formData);
 }

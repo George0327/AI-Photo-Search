@@ -19,6 +19,7 @@ import UsersPage from "./pages/UsersPage";
 import AppLayout from "./components/AppLayout";
 import { fetchCurrentUser, loginWithGoogle, logout } from "./api/authApi";
 import type { AuthUser } from "./api/authApi";
+import { SESSION_EXPIRED_EVENT } from "./api/apiClient";
 import { isElevated } from "./utils/roles";
 
 export default function App() {
@@ -44,8 +45,8 @@ export default function App() {
 
   useEffect(() => {
     const handler = () => setSessionExpired(true);
-    window.addEventListener("session-expired", handler);
-    return () => window.removeEventListener("session-expired", handler);
+    window.addEventListener(SESSION_EXPIRED_EVENT, handler);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handler);
   }, []);
 
   if (loading) {

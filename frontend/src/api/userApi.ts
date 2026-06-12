@@ -1,4 +1,5 @@
 import { fetchJson, patchJson } from "./apiClient";
+import { USERS_PAGE_SIZE } from "../constants";
 
 export type UserDto = {
   id: number;
@@ -10,8 +11,15 @@ export type UserDto = {
   createdAt: string;
 };
 
-export function fetchAllUsers(): Promise<UserDto[]> {
-  return fetchJson<UserDto[]>("/api/admin/users");
+export type UserPageResponse = {
+  users: UserDto[];
+  totalUsers: number;
+  page: number;
+  size: number;
+};
+
+export function fetchUsers(page = 0, size = USERS_PAGE_SIZE): Promise<UserPageResponse> {
+  return fetchJson<UserPageResponse>(`/api/admin/users?page=${page}&size=${size}`);
 }
 
 export function changeUserRole(userId: number, role: UserDto["role"]): Promise<UserDto> {

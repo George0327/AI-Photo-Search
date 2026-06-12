@@ -12,15 +12,15 @@ import {
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
 import { IconAlertCircle, IconLayoutSidebar, IconRefresh } from "@tabler/icons-react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 import { AlbumSidebar } from "../components/AlbumSidebar";
 import { PhotoGrid } from "../components/PhotoGrid";
 import { PhotoPreviewModal } from "../components/PhotoPreviewModal";
 import { SearchBar } from "../components/SearchBar";
 import { useGallery } from "../hooks/useGallery";
-
-const SIDEBAR_WIDTH = 300;
+import { SIDEBAR_WIDTH } from "../constants";
+import type { DriveFileInfo } from "../api/driveApi";
 
 export default function DriveGalleryPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -59,6 +59,17 @@ export default function DriveGalleryPage() {
     loadImages,
   } = useGallery();
 
+  // Stable wrapper so the memoized AlbumRow components don't re-render on
+  // every gallery state change.
+  const { onSelectAlbum } = albumSidebarProps;
+  const handleSelectAlbum = useCallback(
+    (album: DriveFileInfo) => {
+      onSelectAlbum(album);
+      if (!isDesktop) setSidebarOpen(false);
+    },
+    [onSelectAlbum, isDesktop],
+  );
+
   return (
     <>
       {/* Fixed sidebar panel — slides in/out */}
@@ -77,13 +88,7 @@ export default function DriveGalleryPage() {
           overflow: "hidden",
         }}
       >
-        <AlbumSidebar
-          {...albumSidebarProps}
-          onSelectAlbum={(album) => {
-            albumSidebarProps.onSelectAlbum(album);
-            if (!isDesktop) setSidebarOpen(false);
-          }}
-        />
+        <AlbumSidebar {...albumSidebarProps} onSelectAlbum={handleSelectAlbum} />
       </Box>
 
       {/* Mobile backdrop — closes sidebar when tapped */}

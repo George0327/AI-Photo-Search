@@ -8,9 +8,9 @@ import numpy as np
 
 class DetectionFaissStore:
     """
-    FAISS store for face/logo region embeddings.
+    FAISS store for face region embeddings.
     Each entry maps to a detected region: {image_id, bbox, confidence}.
-    One photo can have multiple entries (one per detected face or logo region).
+    One photo can have multiple entries (one per detected face).
     Search results are deduplicated by image_id, keeping the best score per photo.
     """
 

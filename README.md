@@ -1,6 +1,6 @@
 # Photo AI Search
 
-An internal photo search platform for BEST Cluj-Napoca that indexes Google Drive photo albums and enables semantic search using AI (CLIP), face recognition (InsightFace), and logo detection (OWL-ViT).
+An internal photo search platform for BEST Cluj-Napoca that indexes Google Drive photo albums and enables semantic search using AI (CLIP) and face recognition (InsightFace).
 
 ## Architecture
 
@@ -17,7 +17,7 @@ Traefik :80  (reverse proxy)
 
 Internal only:
   ├── postgres             :5432
-  └── ai-service           :8000  (Python FastAPI — CLIP, InsightFace, OWL-ViT)
+  └── ai-service           :8000  (Python FastAPI — CLIP, InsightFace)
 ```
 
 ## Prerequisites
@@ -74,7 +74,7 @@ docker compose up --build
 
 The app will be available at **http://localhost**.
 
-> **Note:** The first startup downloads ~5 GB of AI models (CLIP, InsightFace, OWL-ViT). Subsequent starts are fast because models are cached in a Docker volume.
+> **Note:** The first startup downloads ~5 GB of AI models (CLIP, InsightFace). Subsequent starts are fast because models are cached in a Docker volume.
 
 ## Usage
 
@@ -111,7 +111,7 @@ New users default to `USER`. Roles are assigned in the **Users** page (requires 
 - **Auth service:** Spring Boot 4, Spring Security, OAuth2/OIDC, Spring Session JDBC
 - **Indexing service:** Spring Boot 4, Spring Data JPA, Google Drive API
 - **Search service:** Spring Boot 4, Spring Data JPA
-- **AI service:** Python FastAPI, CLIP (open_clip), InsightFace, OWL-ViT, FAISS
+- **AI service:** Python FastAPI, CLIP (open_clip), InsightFace, FAISS (batch indexing endpoints)
 - **Database:** PostgreSQL 16
 - **Reverse proxy:** Traefik v3
 - **Container orchestration:** Docker Compose

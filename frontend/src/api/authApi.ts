@@ -9,23 +9,26 @@ export type AuthUser = {
   authorities: string[];
 };
 
+const ANONYMOUS_USER: AuthUser = {
+  authenticated: false,
+  sub: "",
+  email: "",
+  name: "",
+  picture: "",
+  authorities: [],
+};
+
 export async function fetchCurrentUser(): Promise<AuthUser> {
-  const response = await fetch(`${BASE_URL}/api/auth/me`, {
-    credentials: "include",
-  });
-
-  if (!response.ok) {
-    return {
-      authenticated: false,
-      sub: "",
-      email: "",
-      name: "",
-      picture: "",
-      authorities: [],
-    };
+  // Intentionally not using fetchJson: an unauthenticated /me must resolve to
+  // the anonymous user instead of dispatching the session-expired event.
+  try {
+    const response = await fetch(`${BASE_URL}/api/auth/me`, { credentials: "include" });
+    if (!response.ok) return ANONYMOUS_USER;
+    return await response.json();
+  } catch (error) {
+    console.warn("Failed to fetch current user:", error);
+    return ANONYMOUS_USER;
   }
-
-  return response.json();
 }
 
 export function loginWithGoogle() {
@@ -38,6 +41,9 @@ export async function logout() {
       method: "POST",
       credentials: "include",
     });
-  } catch {}
+  } catch (error) {
+    // Still redirect: the session cookie may already be gone server-side.
+    console.warn("Logout request failed:", error);
+  }
   window.location.href = "/";
 }

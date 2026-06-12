@@ -1,5 +1,7 @@
+# Dashboard/API disabled: it serves no runtime purpose and the insecure mode
+# exposed it unauthenticated.
 api:
-  insecure: true
+  insecure: false
 
 entryPoints:
   web:

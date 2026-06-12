@@ -15,7 +15,7 @@ import {
   Title,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { fetchAllUsers, changeUserRole } from "../api/userApi";
+import { fetchUsers, changeUserRole } from "../api/userApi";
 import type { UserDto } from "../api/userApi";
 import {
   assignableRoles,
@@ -62,7 +62,7 @@ export default function UsersPage({ currentUserAuthorities }: UsersPageProps) {
     setLoading(true);
     setError(null);
     try {
-      setUsers(await fetchAllUsers());
+      setUsers((await fetchUsers()).users);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load users.");
     } finally {

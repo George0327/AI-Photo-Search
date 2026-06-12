@@ -1,6 +1,7 @@
 import {
   Anchor,
   Avatar,
+  Badge,
   Box,
   Button,
   Container,
@@ -15,7 +16,7 @@ import { Link, useLocation } from "react-router-dom";
 import { IconSparkles } from "@tabler/icons-react";
 import type { ReactNode } from "react";
 import type { AuthUser } from "../api/authApi";
-import { isElevated } from "../utils/roles";
+import { getHighestRole, isElevated, ROLE_COLORS, ROLE_LABELS } from "../utils/roles";
 
 type AppLayoutProps = {
   user: AuthUser;
@@ -46,6 +47,7 @@ function NavLink({ to, active, children }: { to: string; active: boolean; childr
 export default function AppLayout({ user, onLogout, children }: AppLayoutProps) {
   const location = useLocation();
   const elevated = isElevated(user.authorities);
+  const role = getHighestRole(user.authorities);
 
   return (
     <AppShell header={{ height: 64 }}>
@@ -94,9 +96,14 @@ export default function AppLayout({ user, onLogout, children }: AppLayoutProps) 
 
             <Group gap="sm">
               <Box visibleFrom="sm" ta="right">
-                <Text size="sm" fw={500}>
-                  {user.name || user.email}
-                </Text>
+                <Group gap={6} justify="flex-end" wrap="nowrap">
+                  <Text size="sm" fw={500}>
+                    {user.name || user.email}
+                  </Text>
+                  <Badge size="xs" variant="light" color={ROLE_COLORS[role]}>
+                    {ROLE_LABELS[role]}
+                  </Badge>
+                </Group>
                 <Text size="xs" c="dimmed">
                   {user.email}
                 </Text>

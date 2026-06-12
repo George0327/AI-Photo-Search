@@ -1,10 +1,14 @@
 services:
 
+  # Memory limits are sized for the ~7.4 GB Docker Desktop VM on the dev laptop
+  # (Ryzen 6600H, 12 threads, RTX 3050 4GB — CLIP weights live in VRAM).
+  # They are ceilings, not reservations; idle services stay far below them.
   traefik:
     image: traefik:v3.0
+    restart: unless-stopped
+    mem_limit: 128m
     ports:
       - "80:80"
-      - "127.0.0.1:8090:8080"
     volumes:
       - ./traefik.yml:/etc/traefik/traefik.yml:ro
       - ./routes.yml:/etc/traefik/routes.yml:ro
@@ -13,6 +17,8 @@ services:
 
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
+    mem_limit: 512m
     environment:
       POSTGRES_DB: ai_photo_search_db
       POSTGRES_USER: postgres
@@ -29,11 +35,14 @@ services:
 
   auth-service:
     build: ./auth-service
+    restart: unless-stopped
+    mem_limit: 768m
     env_file: .env
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ai_photo_search_db
       SPRING_DATASOURCE_USERNAME: postgres
       APP_SECURITY_FRONTEND_URL: http://localhost
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=60
     depends_on:
       postgres:
         condition: service_healthy
@@ -48,16 +57,20 @@ services:
 
   indexing-service:
     build: ./indexing-service
+    restart: unless-stopped
+    # Indexing shuttles whole image batches through memory; 1g gets OOM-killed.
+    mem_limit: 1.5g
     env_file: .env
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ai_photo_search_db
       SPRING_DATASOURCE_USERNAME: postgres
       APP_AI_SERVICE_BASE_URL: http://ai-service:8000
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=60
     depends_on:
       postgres:
         condition: service_healthy
       ai-service:
-        condition: service_started
+        condition: service_healthy
       auth-service:
         condition: service_healthy
     networks:
@@ -71,17 +84,24 @@ services:
 
   search-service:
     build: ./search-service
+    restart: unless-stopped
+    mem_limit: 768m
     env_file: .env
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ai_photo_search_db
       SPRING_DATASOURCE_USERNAME: postgres
       APP_AI_SERVICE_BASE_URL: http://ai-service:8000
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=60
     depends_on:
       postgres:
         condition: service_healthy
       ai-service:
-        condition: service_started
+        condition: service_healthy
       auth-service:
+        condition: service_healthy
+      # search-service only validates the schema, so on a fresh database it must
+      # start after indexing-service has run its Flyway migrations.
+      indexing-service:
         condition: service_healthy
     networks:
       - app-net
@@ -94,6 +114,10 @@ services:
 
   ai-service:
     build: ./ai-service
+    restart: unless-stopped
+    # Model weights run on the GPU (VRAM); this covers the Python runtime,
+    # CUDA host-side buffers, FAISS indexes and request payloads.
+    mem_limit: 3.5g
     env_file: .env
     environment:
       AI_SERVICE_INTERNAL_API_KEY: ${AI_SERVICE_INTERNAL_API_KEY}
@@ -112,7 +136,8 @@ services:
               count: 1
               capabilities: [gpu]
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/health || exit 1"]
+      # python:3.11-slim has no wget/curl — use the interpreter itself.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -120,6 +145,8 @@ services:
 
   frontend:
     build: ./frontend
+    restart: unless-stopped
+    mem_limit: 128m
     networks:
       - app-net
 

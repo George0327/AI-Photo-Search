@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
-import type { DriveFileInfo } from "../api/driveApi";
-import { fetchAlbums, fetchImages } from "../api/driveApi";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import type { AlbumSearchStatus, DriveFileInfo } from "../api/driveApi";
+import { fetchAlbums, fetchAlbumSearchStatuses, fetchImages } from "../api/driveApi";
 import { searchPhotos } from "../api/searchApi";
 import { searchByFace } from "../api/faceSearchApi";
 import type { SearchMode } from "../components/SearchBar";
-
-const PHOTOS_PER_PAGE = 20;
+import { MAX_TOP_K, MIN_TOP_K, PHOTOS_PER_PAGE } from "../constants";
 
 export type SearchResult = { score: number; albumId: string; file: DriveFileInfo };
 
@@ -14,10 +14,29 @@ const SEARCH_LABELS: Record<SearchMode, string> = {
   face: "Face search results",
 };
 
+function clampTopK(value: string): number {
+  const parsed = Number(value);
+  if (Number.isNaN(parsed)) return 10;
+  return Math.min(Math.max(Math.round(parsed), MIN_TOP_K), MAX_TOP_K);
+}
+
 export function useGallery() {
+  // Text searches are reflected in the URL (?q=…&topK=…&albums=…) so results
+  // can be bookmarked, shared, and survive a page refresh.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialQuery = searchParams.get("q") ?? "";
+  const initialTopK = searchParams.get("topK") ?? "10";
+  const initialAlbumIds = useMemo(
+    () => searchParams.get("albums")?.split(",").filter(Boolean) ?? [],
+    // Read once on mount; afterwards the URL follows the state, not the other way.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
   const [albums, setAlbums] = useState<DriveFileInfo[]>([]);
+  const [albumStatuses, setAlbumStatuses] = useState<Record<string, AlbumSearchStatus>>({});
   const [selectedAlbum, setSelectedAlbum] = useState<DriveFileInfo | null>(null);
-  const [selectedSearchAlbumIds, setSelectedSearchAlbumIds] = useState<string[]>([]);
+  const [selectedSearchAlbumIds, setSelectedSearchAlbumIds] = useState<string[]>(initialAlbumIds);
 
   const [images, setImages] = useState<DriveFileInfo[]>([]);
   const [previewImage, setPreviewImage] = useState<DriveFileInfo | null>(null);
@@ -25,8 +44,8 @@ export function useGallery() {
   const [activePage, setActivePage] = useState(1);
 
   const [inputMode, setInputMode] = useState<SearchMode>("text");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [topK, setTopK] = useState("10");
+  const [searchQuery, setSearchQuery] = useState(initialQuery);
+  const [topK, setTopK] = useState(initialTopK);
   const [referenceFiles, setReferenceFiles] = useState<File[]>([]);
 
   const [activeSearchType, setActiveSearchType] = useState<SearchMode | null>(null);
@@ -37,6 +56,9 @@ export function useGallery() {
   const [imagesLoading, setImagesLoading] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // True until the search restored from the URL (if any) has been re-run.
+  const pendingUrlSearch = useRef(initialQuery.trim().length > 0);
 
   const isSearchActive = activeSearchType !== null;
 
@@ -68,16 +90,23 @@ export function useGallery() {
       setAlbums(data);
       if (!selectedAlbum && data.length > 0) {
         setSelectedAlbum(data[0]);
-        setSelectedSearchAlbumIds([data[0].id]);
+        setSelectedSearchAlbumIds((curr) => (curr.length > 0 ? curr : [data[0].id]));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load albums.");
     } finally {
       setAlbumsLoading(false);
     }
+    // Status badges are best-effort decoration: failure must not break the gallery.
+    try {
+      const statuses = await fetchAlbumSearchStatuses();
+      setAlbumStatuses(Object.fromEntries(statuses.map((s) => [s.driveAlbumId, s])));
+    } catch (err) {
+      console.warn("Failed to load album index statuses:", err);
+    }
   }
 
-  async function loadImages(albumId: string) {
+  const loadImages = useCallback(async (albumId: string) => {
     try {
       setError(null);
       setImagesLoading(true);
@@ -89,20 +118,42 @@ export function useGallery() {
     } finally {
       setImagesLoading(false);
     }
-  }
+  }, []);
 
-  function clearSearch() {
+  const clearSearch = useCallback(() => {
     setActiveSearchType(null);
     setSearchResults([]);
     setSearchQuery("");
     setLastSearchQuery("");
     setReferenceFiles([]);
     setActivePage(1);
-  }
+    setSearchParams({}, { replace: true });
+  }, [setSearchParams]);
 
   function handleModeChange(mode: SearchMode) {
     setInputMode(mode);
     if (isSearchActive) clearSearch();
+  }
+
+  async function runTextSearch(query: string, albumIds: string[]) {
+    const effectiveTopK = clampTopK(topK);
+    try {
+      setError(null);
+      setSearchLoading(true);
+      setActivePage(1);
+      const data = await searchPhotos(query, effectiveTopK, albumIds);
+      setSearchResults(data.results);
+      setActiveSearchType("text");
+      setLastSearchQuery(query);
+      setSearchParams(
+        { q: query, topK: String(effectiveTopK), albums: albumIds.join(",") },
+        { replace: true },
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Search failed.");
+    } finally {
+      setSearchLoading(false);
+    }
   }
 
   async function handleSearch() {
@@ -114,19 +165,7 @@ export function useGallery() {
     if (inputMode === "text") {
       const trimmed = searchQuery.trim();
       if (!trimmed) return;
-      try {
-        setError(null);
-        setSearchLoading(true);
-        setActivePage(1);
-        const data = await searchPhotos(trimmed, Number(topK), selectedSearchAlbumIds);
-        setSearchResults(data.results);
-        setActiveSearchType("text");
-        setLastSearchQuery(trimmed);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Search failed.");
-      } finally {
-        setSearchLoading(false);
-      }
+      await runTextSearch(trimmed, selectedSearchAlbumIds);
       return;
     }
 
@@ -140,7 +179,7 @@ export function useGallery() {
       setSearchLoading(true);
       setActivePage(1);
 
-      const data = await searchByFace(referenceFiles, selectedSearchAlbumIds, Number(topK));
+      const data = await searchByFace(referenceFiles, selectedSearchAlbumIds, clampTopK(topK));
       setSearchResults(data.results);
       setActiveSearchType("face");
       setLastSearchQuery(`${referenceFiles.length} reference photo${referenceFiles.length > 1 ? "s" : ""}`);
@@ -169,23 +208,45 @@ export function useGallery() {
       setActivePage(1);
       loadImages(selectedAlbum.id);
     }
-  }, [selectedAlbum]);
+  }, [selectedAlbum, loadImages]);
+
+  // Re-run a text search restored from the URL once albums are available.
+  useEffect(() => {
+    if (!pendingUrlSearch.current || albums.length === 0) return;
+    pendingUrlSearch.current = false;
+    const query = searchQuery.trim();
+    const albumIds = selectedSearchAlbumIds.length > 0
+      ? selectedSearchAlbumIds
+      : albums.map((a) => a.id);
+    if (query) runTextSearch(query, albumIds);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [albums]);
+
+  const onSelectAlbum = useCallback((album: DriveFileInfo) => {
+    clearSearch();
+    setSelectedAlbum(album);
+  }, [clearSearch]);
+
+  const onSearchAlbumToggle = useCallback((albumId: string, checked: boolean) =>
+    setSelectedSearchAlbumIds((curr) =>
+      checked ? [...curr, albumId] : curr.filter((id) => id !== albumId),
+    ), []);
+
+  const onSelectAllForSearch = useCallback(
+    () => setSelectedSearchAlbumIds(albums.map((a) => a.id)), [albums]);
+
+  const onClearSearchSelection = useCallback(() => setSelectedSearchAlbumIds([]), []);
 
   const albumSidebarProps = {
     albums,
+    albumStatuses,
     albumsLoading,
     selectedAlbum,
     selectedSearchAlbumIds,
-    onSelectAlbum: (album: DriveFileInfo) => {
-      clearSearch();
-      setSelectedAlbum(album);
-    },
-    onSearchAlbumToggle: (albumId: string, checked: boolean) =>
-      setSelectedSearchAlbumIds((curr) =>
-        checked ? [...curr, albumId] : curr.filter((id) => id !== albumId),
-      ),
-    onSelectAllForSearch: () => setSelectedSearchAlbumIds(albums.map((a) => a.id)),
-    onClearSearchSelection: () => setSelectedSearchAlbumIds([]),
+    onSelectAlbum,
+    onSearchAlbumToggle,
+    onSelectAllForSearch,
+    onClearSearchSelection,
   };
 
   return {

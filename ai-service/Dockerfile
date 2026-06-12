@@ -11,4 +11,6 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 COPY app/ app/
 ENV HF_HOME=/model-cache/huggingface
 ENV INSIGHTFACE_HOME=/model-cache/insightface
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Exactly one worker: FAISS stores and per-album locks live in process memory,
+# so multiple workers would race each other writing the same index files.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

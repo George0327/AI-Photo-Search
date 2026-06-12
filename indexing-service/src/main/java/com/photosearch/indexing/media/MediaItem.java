@@ -11,7 +11,8 @@ import java.time.Instant;
         @Index(name = "idx_media_drive_file_id", columnList = "drive_file_id"),
         @Index(name = "idx_media_album_id", columnList = "album_id"),
         @Index(name = "idx_media_deleted_in_drive", columnList = "deleted_in_drive"),
-        @Index(name = "idx_media_indexing_status", columnList = "indexing_status")
+        @Index(name = "idx_media_indexing_status", columnList = "indexing_status"),
+        @Index(name = "idx_media_face_indexing_status", columnList = "face_indexing_status")
 })
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class MediaItem {
@@ -44,6 +45,14 @@ public class MediaItem {
 
     private Instant faissIndexedAt;
     @Column(length = 2000) private String indexingError;
+
+    // Face indexing tracked per item, mirroring the CLIP lifecycle above.
+    @Enumerated(EnumType.STRING)
+    @Column(name = "face_indexing_status", nullable = false, length = 30) @Builder.Default
+    private IndexingStatus faceIndexingStatus = IndexingStatus.NOT_INDEXED;
+
+    private Instant faceIndexedAt;
+    @Column(length = 2000) private String faceIndexingError;
 
     @Column(nullable = false, updatable = false) private Instant createdAt;
     @Column(nullable = false) private Instant updatedAt;

@@ -7,8 +7,10 @@ import {
   indexAllNewPhotos,
   indexFaces,
   reindexAlbum,
+  reindexFaces,
 } from "../api/adminAiApi";
 import type { AlbumIndexStatus, DriveIndexFailure, DriveIndexResult } from "../api/adminAiApi";
+import { ADMIN_POLL_INTERVAL_MS } from "../constants";
 
 export function useAdminIndexing() {
   const [albums, setAlbums] = useState<AlbumIndexStatus[]>([]);
@@ -18,6 +20,7 @@ export function useAdminIndexing() {
   const [reindexingAlbumId, setReindexingAlbumId] = useState<string | null>(null);
   const [indexingAll, setIndexingAll] = useState(false);
   const [indexingFacesAlbumId, setIndexingFacesAlbumId] = useState<string | null>(null);
+  const [reindexingFacesAlbumId, setReindexingFacesAlbumId] = useState<string | null>(null);
 
   const [failures, setFailures] = useState<DriveIndexFailure[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -30,7 +33,8 @@ export function useAdminIndexing() {
     indexingAlbumId !== null ||
     reindexingAlbumId !== null ||
     indexingAll ||
-    indexingFacesAlbumId !== null;
+    indexingFacesAlbumId !== null ||
+    reindexingFacesAlbumId !== null;
 
   async function loadAlbumStatuses() {
     try {
@@ -152,8 +156,19 @@ export function useAdminIndexing() {
       () => setIndexingFacesAlbumId(null),
       () => indexFaces(album.driveAlbumId),
       "Faces indexed",
-      "face",
-      `Indexing faces in "${album.title}"…`,
+      "photo",
+      `Indexing faces in new photos of "${album.title}"…`,
+    );
+  }
+
+  function handleReindexFaces(album: AlbumIndexStatus) {
+    return runOperation(
+      () => setReindexingFacesAlbumId(album.driveAlbumId),
+      () => setReindexingFacesAlbumId(null),
+      () => reindexFaces(album.driveAlbumId),
+      "Face reindex complete",
+      "photo",
+      `Reindexing faces in all photos of "${album.title}"…`,
     );
   }
 
@@ -179,22 +194,38 @@ export function useAdminIndexing() {
       setIndexingFacesAlbumId(null);
   }, [albums]);
 
-  // Poll every 3 seconds while any album is actively indexing (CLIP or faces)
+  // Poll while an operation we started is in flight OR a fetched status says an
+  // album is indexing (covers runs started in another tab/session). Without the
+  // local-operation condition, a click-started run would show no live progress:
+  // the first status fetch only happens after the request completes.
+  // Paused while the tab is hidden; refreshes immediately when it becomes visible again.
   useEffect(() => {
-    const isPolling = albums.some(a => a.indexingImages || a.indexingFaces);
+    const isPolling = anyAlbumBusy || albums.some(a => a.indexingImages || a.indexingFaces);
     if (!isPolling) return;
 
-    const interval = setInterval(async () => {
+    const refresh = async () => {
       try {
         const data = await fetchAlbumIndexStatuses();
         setAlbums(data);
-      } catch {
-        // ignore polling errors
+      } catch (err) {
+        console.warn("Polling album statuses failed:", err);
       }
-    }, 3000);
+    };
 
-    return () => clearInterval(interval);
-  }, [albums]);
+    const interval = setInterval(() => {
+      if (!document.hidden) refresh();
+    }, ADMIN_POLL_INTERVAL_MS);
+
+    const onVisibilityChange = () => {
+      if (!document.hidden) refresh();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [albums, anyAlbumBusy]);
 
   return {
     albums,
@@ -203,6 +234,7 @@ export function useAdminIndexing() {
     reindexingAlbumId,
     indexingAll,
     indexingFacesAlbumId,
+    reindexingFacesAlbumId,
     anyAlbumBusy,
     failures,
     error,
@@ -212,5 +244,6 @@ export function useAdminIndexing() {
     handleReindexAlbum,
     handleIndexAllNewPhotos,
     handleIndexFaces,
+    handleReindexFaces,
   };
 }

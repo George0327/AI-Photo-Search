@@ -33,12 +33,12 @@ public class DriveAiIndexingService {
 
     public List<AlbumIndexStatus> getAlbumIndexStatuses() {
         List<Album> albums = albumRepository.findByEnabledTrueAndDeletedInDriveFalseOrderByTitleAsc();
-        return albums.stream().map(albumIndexStatusService::buildAlbumIndexStatus).toList();
+        return albumIndexStatusService.buildAlbumIndexStatuses(albums);
     }
 
     public List<AlbumIndexStatus> syncAndGetAlbumIndexStatuses() {
         List<Album> albums = driveAlbumSyncService.syncAllDriveAlbums();
-        return albums.stream().map(albumIndexStatusService::buildAlbumIndexStatus).toList();
+        return albumIndexStatusService.buildAlbumIndexStatuses(albums);
     }
 
     public DriveIndexResult indexNewPhotosInAlbum(String driveAlbumId) {
@@ -108,6 +108,9 @@ public class DriveAiIndexingService {
             int totalIndexed = 0, totalMediaSeen = 0;
             List<DriveIndexFailure> allFailures = new ArrayList<>();
 
+            // Albums are processed sequentially on purpose: media batches within
+            // each album already saturate the GPU-bound AI service, so running
+            // albums in parallel would only add contention.
             for (Album album : albums) {
                 List<MediaItem> mediaToIndex = mediaItemRepository
                         .findByAlbumAndDeletedInDriveFalseAndIndexingStatusIn(album, NEEDS_INDEXING_STATUSES);

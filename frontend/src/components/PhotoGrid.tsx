@@ -1,3 +1,4 @@
+import { memo } from "react";
 import {
   Badge,
   Card,
@@ -38,7 +39,9 @@ function scoreColor(score: number): string {
   return "gray";
 }
 
-export function PhotoGrid({
+// Memoized: the grid renders many lazy-loaded images, so skipping re-renders
+// when the parent re-renders with unchanged props avoids visible churn.
+export const PhotoGrid = memo(function PhotoGrid({
   images,
   loading,
   searchMode,
@@ -156,4 +159,4 @@ export function PhotoGrid({
       )}
     </Paper>
   );
-}
+});

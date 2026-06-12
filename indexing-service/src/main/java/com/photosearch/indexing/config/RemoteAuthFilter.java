@@ -18,11 +18,13 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,6 +34,7 @@ public class RemoteAuthFilter extends OncePerRequestFilter {
 
     private static final Logger logger = LoggerFactory.getLogger(RemoteAuthFilter.class);
     private static final long CACHE_TTL_MS = 30_000;
+    private static final int MAX_CACHE_ENTRIES = 1_000;
 
     @Value("${app.auth-service.url:http://auth-service:8081}")
     private String authServiceUrl;
@@ -86,8 +89,12 @@ public class RemoteAuthFilter extends OncePerRequestFilter {
                     UsernamePasswordAuthenticationToken auth =
                             new UsernamePasswordAuthenticationToken(email, null, authorities);
                     SecurityContextHolder.getContext().setAuthentication(auth);
-                    tokenCache.put(cookieHeader, new Object[]{auth, System.currentTimeMillis() + CACHE_TTL_MS});
+                    cacheAuthentication(cookieHeader, auth);
                 }
+            } catch (HttpClientErrorException e) {
+                // auth-service answered but rejected the session — proceed
+                // unauthenticated and let Spring Security return 401/403.
+                logger.debug("Auth service rejected session: {}", e.getStatusCode());
             } catch (Exception e) {
                 logger.warn("Auth service unreachable: {}", e.getMessage());
                 response.sendError(HttpServletResponse.SC_SERVICE_UNAVAILABLE, "Auth service unavailable");
@@ -96,6 +103,23 @@ public class RemoteAuthFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private void cacheAuthentication(String cookieHeader, Authentication auth) {
+        long now = System.currentTimeMillis();
+        if (tokenCache.size() >= MAX_CACHE_ENTRIES) {
+            tokenCache.values().removeIf(entry -> now >= (long) entry[1]);
+        }
+        if (tokenCache.size() >= MAX_CACHE_ENTRIES) {
+            // Still full after dropping expired entries — evict an arbitrary one
+            // so the cache stays bounded.
+            Iterator<String> it = tokenCache.keySet().iterator();
+            if (it.hasNext()) {
+                it.next();
+                it.remove();
+            }
+        }
+        tokenCache.put(cookieHeader, new Object[]{auth, now + CACHE_TTL_MS});
     }
 
     private String buildCookieHeader(HttpServletRequest request) {

@@ -1,5 +1,7 @@
 package com.photosearch.indexing.drive;
 
+import com.photosearch.indexing.ai.indexing.AlbumSearchStatus;
+import com.photosearch.indexing.ai.indexing.DriveAiIndexingService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
@@ -13,11 +15,20 @@ import java.util.List;
 public class DriveController {
 
     private final GoogleDriveService googleDriveService;
+    private final DriveAiIndexingService driveAiIndexingService;
 
     @GetMapping("/albums")
     public List<DriveFileInfo> listAlbums() {
         String rootId = googleDriveService.resolveRootFolderId();
         return googleDriveService.listAlbumFolders(rootId);
+    }
+
+    /** Indexing summary for the gallery sidebar — available to every user, DB-only (no Drive calls). */
+    @GetMapping("/albums/index-status")
+    public List<AlbumSearchStatus> getAlbumSearchStatuses() {
+        return driveAiIndexingService.getAlbumIndexStatuses().stream()
+                .map(AlbumSearchStatus::from)
+                .toList();
     }
 
     @GetMapping("/albums/{albumId}/images")

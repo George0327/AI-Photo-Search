@@ -23,6 +23,7 @@ export default function AdminPage() {
     reindexingAlbumId,
     indexingAll,
     indexingFacesAlbumId,
+    reindexingFacesAlbumId,
     anyAlbumBusy,
     failures,
     error,
@@ -31,6 +32,7 @@ export default function AdminPage() {
     handleReindexAlbum,
     handleIndexAllNewPhotos,
     handleIndexFaces,
+    handleReindexFaces,
   } = useAdminIndexing();
 
   const totalActive = albums.reduce((s, a) => s + a.totalActiveImages, 0);
@@ -134,10 +136,12 @@ export default function AdminPage() {
             indexingAlbumId={indexingAlbumId}
             reindexingAlbumId={reindexingAlbumId}
             indexingFacesAlbumId={indexingFacesAlbumId}
+            reindexingFacesAlbumId={reindexingFacesAlbumId}
             anyBusy={anyAlbumBusy}
             onIndexAlbum={handleIndexAlbum}
             onReindexAlbum={handleReindexAlbum}
             onIndexFaces={handleIndexFaces}
+            onReindexFaces={handleReindexFaces}
           />
         )}
       </Stack>

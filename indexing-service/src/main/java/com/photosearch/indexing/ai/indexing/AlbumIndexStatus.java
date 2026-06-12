@@ -13,6 +13,8 @@ public record AlbumIndexStatus(
         long deletedImages,
         boolean reindexRecommended,
         boolean indexingImages,
+        long faceIndexedImages,
+        long faceNeedsIndexImages,
         boolean indexingFaces,
         Instant faceIndexedAt
 ) {}

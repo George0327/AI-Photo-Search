@@ -1,7 +1,9 @@
 export const BASE_URL = import.meta.env.VITE_API_URL ?? "";
 
+export const SESSION_EXPIRED_EVENT = "session-expired";
+
 export function dispatchSessionExpired() {
-  window.dispatchEvent(new Event("session-expired"));
+  window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
 }
 
 export async function extractErrorMessage(response: Response): Promise<string> {
@@ -10,12 +12,14 @@ export async function extractErrorMessage(response: Response): Promise<string> {
     if (body && typeof body.error === "string" && body.error.length > 0) {
       return body.error;
     }
-  } catch {}
+  } catch {
+    // Body was not JSON — fall through to the generic status message.
+  }
   return `Request failed: ${response.status} ${response.statusText}`;
 }
 
-export async function fetchJson<T>(url: string): Promise<T> {
-  const response = await fetch(`${BASE_URL}${url}`, { credentials: "include" });
+async function request<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${BASE_URL}${url}`, { credentials: "include", ...init });
 
   if (response.status === 401) {
     dispatchSessionExpired();
@@ -34,47 +38,22 @@ export async function fetchJson<T>(url: string): Promise<T> {
   return response.json();
 }
 
-export async function postJson<T>(url: string): Promise<T> {
-  const response = await fetch(`${BASE_URL}${url}`, { method: "POST", credentials: "include" });
-
-  if (response.status === 401) {
-    dispatchSessionExpired();
-    throw new Error("Session expired");
-  }
-
-  if (!response.ok) {
-    throw new Error(await extractErrorMessage(response));
-  }
-
-  const contentType = response.headers.get("content-type");
-  if (!contentType || !contentType.includes("application/json")) {
-    throw new Error("Backend did not return JSON. You may need to log in first.");
-  }
-
-  return response.json();
+export function fetchJson<T>(url: string): Promise<T> {
+  return request<T>(url);
 }
 
-export async function patchJson<T>(url: string, body: unknown): Promise<T> {
-  const response = await fetch(`${BASE_URL}${url}`, {
+export function postJson<T>(url: string): Promise<T> {
+  return request<T>(url, { method: "POST" });
+}
+
+export function patchJson<T>(url: string, body: unknown): Promise<T> {
+  return request<T>(url, {
     method: "PATCH",
-    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+}
 
-  if (response.status === 401) {
-    dispatchSessionExpired();
-    throw new Error("Session expired");
-  }
-
-  if (!response.ok) {
-    throw new Error(await extractErrorMessage(response));
-  }
-
-  const contentType = response.headers.get("content-type");
-  if (!contentType || !contentType.includes("application/json")) {
-    throw new Error("Backend did not return JSON. You may need to log in first.");
-  }
-
-  return response.json();
+export function postFormData<T>(url: string, formData: FormData): Promise<T> {
+  return request<T>(url, { method: "POST", body: formData });
 }

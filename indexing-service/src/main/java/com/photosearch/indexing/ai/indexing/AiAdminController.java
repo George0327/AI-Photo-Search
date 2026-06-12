@@ -11,7 +11,7 @@ import java.util.List;
 public class AiAdminController {
 
     private final DriveAiIndexingService driveAiIndexingService;
-    private final FaceLogoIndexingService faceLogoIndexingService;
+    private final FaceIndexingService faceIndexingService;
 
     @GetMapping("/albums/status")
     public List<AlbumIndexStatus> getAlbumStatuses() {
@@ -40,7 +40,12 @@ public class AiAdminController {
 
     @PostMapping("/index-faces/{albumId}")
     public DriveIndexResult indexFaces(@PathVariable String albumId) {
-        return faceLogoIndexingService.indexFacesForAlbum(albumId);
+        return faceIndexingService.indexNewFacesInAlbum(albumId);
+    }
+
+    @PostMapping("/reindex-faces/{albumId}")
+    public DriveIndexResult reindexFaces(@PathVariable String albumId) {
+        return faceIndexingService.reindexFacesForAlbum(albumId);
     }
 
 }

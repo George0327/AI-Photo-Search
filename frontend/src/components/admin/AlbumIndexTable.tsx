@@ -19,15 +19,28 @@ type AlbumIndexTableProps = {
   indexingAlbumId: string | null;
   reindexingAlbumId: string | null;
   indexingFacesAlbumId: string | null;
+  reindexingFacesAlbumId: string | null;
   anyBusy: boolean;
   onIndexAlbum: (album: AlbumIndexStatus) => void;
   onReindexAlbum: (album: AlbumIndexStatus) => void;
   onIndexFaces: (album: AlbumIndexStatus) => void;
+  onReindexFaces: (album: AlbumIndexStatus) => void;
 };
 
-function formatDate(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+// Shared badge logic so the CLIP and Faces columns behave identically.
+function indexBadge(
+  busy: boolean,
+  needsIndex: number,
+  indexed: number,
+  total: number,
+  deleted: number,
+): { color: string; label: string } {
+  if (busy) return { color: "blue", label: "Indexing…" };
+  if (deleted > 0) return { color: "red", label: "Reindex" };
+  if (needsIndex > 0) return { color: "yellow", label: "New photos" };
+  if (indexed > 0) return { color: "green", label: "Indexed" };
+  if (total > 0) return { color: "gray", label: "Not indexed" };
+  return { color: "gray", label: "No photos" };
 }
 
 export function AlbumIndexTable({
@@ -35,10 +48,12 @@ export function AlbumIndexTable({
   indexingAlbumId,
   reindexingAlbumId,
   indexingFacesAlbumId,
+  reindexingFacesAlbumId,
   anyBusy,
   onIndexAlbum,
   onReindexAlbum,
   onIndexFaces,
+  onReindexFaces,
 }: AlbumIndexTableProps) {
   const { sortedKeys, grouped } = useMemo(() => {
     const m = new Map<string, AlbumIndexStatus[]>();
@@ -94,27 +109,16 @@ export function AlbumIndexTable({
                     reindexingAlbumId === album.driveAlbumId ||
                     album.indexingImages;
                   const isFacesIndexingNow =
-                    indexingFacesAlbumId === album.driveAlbumId || album.indexingFaces;
+                    indexingFacesAlbumId === album.driveAlbumId ||
+                    reindexingFacesAlbumId === album.driveAlbumId ||
+                    album.indexingFaces;
 
-                  const clipBadgeColor = isIndexingNow
-                    ? "blue"
-                    : album.deletedImages > 0
-                    ? "red"
-                    : album.needsIndexImages > 0
-                    ? "yellow"
-                    : album.totalActiveImages > 0
-                    ? "green"
-                    : "gray";
-
-                  const clipBadgeLabel = isIndexingNow
-                    ? "Indexing…"
-                    : album.deletedImages > 0
-                    ? "Reindex"
-                    : album.needsIndexImages > 0
-                    ? "New photos"
-                    : album.totalActiveImages > 0
-                    ? "Indexed"
-                    : "No photos";
+                  const clipBadge = indexBadge(
+                    isIndexingNow, album.needsIndexImages, album.indexedImages,
+                    album.totalActiveImages, album.deletedImages);
+                  const faceBadge = indexBadge(
+                    isFacesIndexingNow, album.faceNeedsIndexImages, album.faceIndexedImages,
+                    album.totalActiveImages, 0);
 
                   return (
                     <Table.Tr key={album.driveAlbumId}>
@@ -134,29 +138,28 @@ export function AlbumIndexTable({
                           withArrow
                         >
                           <Badge
-                            color={clipBadgeColor}
+                            color={clipBadge.color}
                             variant="light"
                             style={{ cursor: "default" }}
                             leftSection={isIndexingNow ? <Loader size={10} color="blue" /> : undefined}
                           >
-                            {clipBadgeLabel}
+                            {clipBadge.label}
                           </Badge>
                         </Tooltip>
                       </Table.Td>
 
                       <Table.Td>
                         <Tooltip
-                          label={isFacesIndexingNow ? "Indexing faces…" : album.faceIndexedAt ? `Indexed: ${formatDate(album.faceIndexedAt)}` : "Not indexed"}
+                          label={`${album.faceIndexedImages} indexed · ${album.faceNeedsIndexImages} pending`}
                           withArrow
                         >
                           <Badge
-                            size="sm"
-                            color={isFacesIndexingNow ? "blue" : album.faceIndexedAt ? "teal" : "gray"}
+                            color={faceBadge.color}
                             variant="light"
                             leftSection={isFacesIndexingNow ? <Loader size={10} color="blue" /> : <IconFaceId size={10} />}
                             style={{ cursor: "default" }}
                           >
-                            {isFacesIndexingNow ? "Indexing…" : album.faceIndexedAt ? "Indexed" : "—"}
+                            {faceBadge.label}
                           </Badge>
                         </Tooltip>
                       </Table.Td>
@@ -190,10 +193,21 @@ export function AlbumIndexTable({
                             color="teal"
                             leftSection={<IconFaceId size={14} />}
                             onClick={() => onIndexFaces(album)}
-                            loading={isFacesIndexingNow}
-                            disabled={anyBusy || album.totalActiveImages === 0}
+                            loading={indexingFacesAlbumId === album.driveAlbumId}
+                            disabled={anyBusy || album.faceNeedsIndexImages === 0}
                           >
-                            Faces
+                            Index new faces
+                          </Button>
+
+                          <Button
+                            size="xs"
+                            variant="light"
+                            color="gray"
+                            onClick={() => onReindexFaces(album)}
+                            loading={reindexingFacesAlbumId === album.driveAlbumId}
+                            disabled={anyBusy || album.faceIndexedImages === 0}
+                          >
+                            Reindex faces
                           </Button>
 
                         </Group>

@@ -11,6 +11,7 @@ import {
 import { useHotkeys } from "@mantine/hooks";
 import { IconSearch } from "@tabler/icons-react";
 import { ReferenceImageUpload } from "./ReferenceImageUpload";
+import { MAX_TOP_K, MIN_TOP_K } from "../constants";
 
 export type SearchMode = "text" | "face";
 
@@ -89,9 +90,12 @@ export function SearchBar({
         <NumberInput
           size="md"
           radius="md"
+          aria-label="Number of results"
           value={Number(topK)}
           onChange={(val) => onTopKChange(String(val || 10))}
-          min={1}
+          min={MIN_TOP_K}
+          max={MAX_TOP_K}
+          clampBehavior="strict"
           step={10}
           w={90}
         />

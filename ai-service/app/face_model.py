@@ -1,4 +1,5 @@
 import io
+import os
 
 import cv2
 import numpy as np
@@ -16,7 +17,11 @@ class FaceModel:
         import torch
         providers = ["CUDAExecutionProvider", "CPUExecutionProvider"] \
             if torch.cuda.is_available() else ["CPUExecutionProvider"]
-        self.app = FaceAnalysis(name="buffalo_l", providers=providers)
+        # insightface ignores the INSIGHTFACE_HOME env var — its model root is a
+        # constructor argument. Without this, buffalo_l re-downloads to
+        # ~/.insightface on every container recreation instead of the cache volume.
+        model_root = os.environ.get("INSIGHTFACE_HOME", "~/.insightface")
+        self.app = FaceAnalysis(name="buffalo_l", root=model_root, providers=providers)
         ctx_id = 0 if torch.cuda.is_available() else -1
         self.app.prepare(ctx_id=ctx_id, det_size=(640, 640))
 

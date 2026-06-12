@@ -34,13 +34,18 @@ public class FaceSearchService {
         AiFaceSearchResponse aiResponse = aiServiceClient.searchByFace(
                 imageBytesList, fileNames, albumIds != null ? albumIds : List.of(), topK);
 
-        if (aiResponse == null || !aiResponse.success() || aiResponse.results().isEmpty()) {
+        if (aiResponse == null || !aiResponse.success()
+                || aiResponse.results() == null || aiResponse.results().isEmpty()) {
             return new FaceSearchResponse(
                     aiResponse != null ? aiResponse.message() : "No response from AI service.", List.of());
         }
 
         List<String> driveFileIds = aiResponse.results().stream()
                 .map(AiFaceSearchResult::itemId).distinct().toList();
+        // Unlike photo search, no IndexingStatus.INDEXED filter here: that status
+        // tracks CLIP indexing only, while face indexing is tracked per album.
+        // A photo whose CLIP indexing failed can still be legitimately face-indexed,
+        // so the only guard needed is that the photo still exists in Drive.
         Map<String, MediaItem> mediaMap = mediaItemRepository.findActiveByDriveFileIdIn(driveFileIds)
                 .stream().collect(Collectors.toMap(MediaItem::getDriveFileId, Function.identity()));
 

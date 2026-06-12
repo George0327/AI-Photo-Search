@@ -1,3 +1,5 @@
 package com.photosearch.indexing.ai.dto;
 
-public record AiFaceIndexResponse(boolean success, int faceCount, String message) {}
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+public record AiFaceIndexResponse(boolean success, @JsonProperty("face_count") int faceCount, String message) {}

@@ -25,6 +25,33 @@ class SearchResponse(BaseModel):
     results: List[SearchResultItem]
 
 
+# ── Batch indexing ────────────────────────────────────────────────────────────
+
+class BatchIndexItemResult(BaseModel):
+    image_id: str
+    success: bool
+    message: str
+
+
+class BatchIndexResponse(BaseModel):
+    success: bool
+    message: str
+    results: List[BatchIndexItemResult]
+
+
+class FaceBatchIndexItemResult(BaseModel):
+    image_id: str
+    success: bool
+    face_count: int
+    message: str
+
+
+class FaceBatchIndexResponse(BaseModel):
+    success: bool
+    message: str
+    results: List[FaceBatchIndexItemResult]
+
+
 # ── Face indexing / search ────────────────────────────────────────────────────
 
 class FaceIndexResponse(BaseModel):

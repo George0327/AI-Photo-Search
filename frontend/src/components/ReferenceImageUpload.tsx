@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { ActionIcon, Box, Button, Group, Image, Stack, Text } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
 import { IconPhoto, IconUpload, IconX } from "@tabler/icons-react";
+import { MAX_REFERENCE_FILES, MAX_REFERENCE_FILE_SIZE_MB } from "../constants";
 
 type ReferenceImageUploadProps = {
   files: File[];
@@ -13,7 +15,7 @@ export function ReferenceImageUpload({
   files,
   onFilesChange,
   label,
-  maxFiles = 5,
+  maxFiles = MAX_REFERENCE_FILES,
 }: ReferenceImageUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [previews, setPreviews] = useState<string[]>([]);
@@ -26,7 +28,24 @@ export function ReferenceImageUpload({
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(e.target.files ?? []);
-    const merged = [...files, ...selected].slice(0, maxFiles);
+    const rejected: string[] = [];
+    const accepted = selected.filter((file) => {
+      const isImage = file.type.startsWith("image/");
+      const fitsSize = file.size <= MAX_REFERENCE_FILE_SIZE_MB * 1024 * 1024;
+      if (!isImage || !fitsSize) {
+        rejected.push(file.name);
+        return false;
+      }
+      return true;
+    });
+    if (rejected.length > 0) {
+      notifications.show({
+        title: "Some files were skipped",
+        message: `Only images up to ${MAX_REFERENCE_FILE_SIZE_MB} MB are accepted: ${rejected.join(", ")}`,
+        color: "yellow",
+      });
+    }
+    const merged = [...files, ...accepted].slice(0, maxFiles);
     onFilesChange(merged);
     e.target.value = "";
   }

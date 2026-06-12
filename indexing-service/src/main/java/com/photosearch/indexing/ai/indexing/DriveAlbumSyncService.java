@@ -97,6 +97,16 @@ public class DriveAlbumSyncService {
                 mediaItem.setIndexingError(null);
             }
 
+            // Face indexing follows the same lifecycle as CLIP indexing.
+            if (driveFileChanged && mediaItem.getFaceIndexingStatus() == IndexingStatus.INDEXED) {
+                mediaItem.setFaceIndexingStatus(IndexingStatus.STALE);
+            }
+            if (mediaItem.getFaceIndexingStatus() == IndexingStatus.DELETED) {
+                mediaItem.setFaceIndexingStatus(IndexingStatus.NOT_INDEXED);
+                mediaItem.setFaceIndexedAt(null);
+                mediaItem.setFaceIndexingError(null);
+            }
+
             mediaItem.setAlbum(album);
             mediaItem.setFilename(driveImage.getName());
             mediaItem.setMimeType(driveImage.getMimeType());
@@ -120,6 +130,8 @@ public class DriveAlbumSyncService {
                 item.setDeletedInDrive(true);
                 item.setIndexingStatus(IndexingStatus.DELETED);
                 item.setIndexingError("Deleted from Google Drive.");
+                item.setFaceIndexingStatus(IndexingStatus.DELETED);
+                item.setFaceIndexingError("Deleted from Google Drive.");
                 toDelete.add(item);
             }
         }

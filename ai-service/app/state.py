@@ -27,7 +27,9 @@ face_model: FaceModel | None = None
 _embedding_dim: int | None = None
 
 # ── Per-album in-memory caches and async locks ───────────────────────────────
-# asyncio is single-threaded so plain dict access is safe
+# Store loaders may run on executor threads, but access to a given album's
+# entry is always serialized by its asyncio lock, and CPython dict assignment
+# is atomic, so plain dicts are safe here.
 
 _album_stores: dict[str, FaissStore] = {}
 _face_stores: dict[str, DetectionFaissStore] = {}

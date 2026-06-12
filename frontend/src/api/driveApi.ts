@@ -14,8 +14,21 @@ import { BASE_URL, fetchJson } from "./apiClient";
 
 const DRIVE_API_BASE = "/api/drive";
 
+export type AlbumSearchStatus = {
+  driveAlbumId: string;
+  totalActiveImages: number;
+  clipIndexedImages: number;
+  clipPendingImages: number;
+  faceIndexedImages: number;
+  facePendingImages: number;
+};
+
 export function fetchAlbums(): Promise<DriveFileInfo[]> {
   return fetchJson<DriveFileInfo[]>(`${DRIVE_API_BASE}/albums`);
+}
+
+export function fetchAlbumSearchStatuses(): Promise<AlbumSearchStatus[]> {
+  return fetchJson<AlbumSearchStatus[]>(`${DRIVE_API_BASE}/albums/index-status`);
 }
 
 export function fetchImages(albumId: string): Promise<DriveFileInfo[]> {

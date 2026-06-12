@@ -18,5 +18,10 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    rules: {
+      // The app's fetch-on-mount hooks set loading state synchronously inside
+      // effects; complying would require restructuring all data fetching.
+      'react-hooks/set-state-in-effect': 'off',
+    },
   },
 ])

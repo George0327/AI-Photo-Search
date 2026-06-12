@@ -33,3 +33,10 @@ export const ROLE_LABELS: Record<AppRole, string> = {
   ROLE_SUPER_ADMIN: "Super Admin",
   ROLE_OWNER: "Owner",
 };
+
+export const ROLE_COLORS: Record<AppRole, string> = {
+  ROLE_USER: "gray",
+  ROLE_ADMIN: "blue",
+  ROLE_SUPER_ADMIN: "violet",
+  ROLE_OWNER: "grape",
+};

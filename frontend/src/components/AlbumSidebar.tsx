@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import {
   Accordion,
   Badge,
@@ -13,14 +13,15 @@ import {
   Text,
   ThemeIcon,
   Title,
+  Tooltip,
 } from "@mantine/core";
 import { IconPhoto } from "@tabler/icons-react";
-import type { DriveFileInfo } from "../api/driveApi";
-
-const SIDEBAR_SCROLL_HEIGHT = "calc(100vh - 280px)";
+import type { AlbumSearchStatus, DriveFileInfo } from "../api/driveApi";
+import { SIDEBAR_SCROLL_HEIGHT } from "../constants";
 
 type AlbumSidebarProps = {
   albums: DriveFileInfo[];
+  albumStatuses: Record<string, AlbumSearchStatus>;
   albumsLoading: boolean;
   selectedAlbum: DriveFileInfo | null;
   selectedSearchAlbumIds: string[];
@@ -32,13 +33,30 @@ type AlbumSidebarProps = {
 
 type AlbumRowProps = {
   album: DriveFileInfo;
+  status?: AlbumSearchStatus;
   isBrowsing: boolean;
   checkedForSearch: boolean;
   onSelectAlbum: (album: DriveFileInfo) => void;
   onSearchAlbumToggle: (albumId: string, checked: boolean) => void;
 };
 
-function AlbumRow({ album, isBrowsing, checkedForSearch, onSelectAlbum, onSearchAlbumToggle }: AlbumRowProps) {
+function indexDotColor(indexed: number, pending: number): string {
+  if (indexed > 0 && pending === 0) return "green";
+  if (indexed > 0) return "yellow";
+  return "gray";
+}
+
+function indexTooltip(kind: string, indexed: number, total: number): string {
+  if (indexed === 0) return `${kind}: not indexed yet`;
+  if (indexed >= total) return `${kind}: all ${total} photos searchable`;
+  return `${kind}: ${indexed} of ${total} photos searchable`;
+}
+
+// Memoized: with hundreds of albums in the sidebar, only rows whose selection
+// state changed should re-render.
+const AlbumRow = memo(function AlbumRow({
+  album, status, isBrowsing, checkedForSearch, onSelectAlbum, onSearchAlbumToggle,
+}: AlbumRowProps) {
   return (
     <Group
       gap="xs"
@@ -64,6 +82,24 @@ function AlbumRow({ album, isBrowsing, checkedForSearch, onSelectAlbum, onSearch
           {album.name}
         </Text>
       </Group>
+
+      {status && (
+        <Group gap={4} wrap="nowrap">
+          <Tooltip label={indexTooltip("Text search", status.clipIndexedImages, status.totalActiveImages)} withArrow>
+            <Badge size="xs" variant="dot" color={indexDotColor(status.clipIndexedImages, status.clipPendingImages)}
+                   style={{ cursor: "default" }}>
+              AI
+            </Badge>
+          </Tooltip>
+          <Tooltip label={indexTooltip("Face search", status.faceIndexedImages, status.totalActiveImages)} withArrow>
+            <Badge size="xs" variant="dot" color={indexDotColor(status.faceIndexedImages, status.facePendingImages)}
+                   style={{ cursor: "default" }}>
+              Face
+            </Badge>
+          </Tooltip>
+        </Group>
+      )}
+
       <Checkbox
         checked={checkedForSearch}
         aria-label={album.name}
@@ -72,10 +108,18 @@ function AlbumRow({ album, isBrowsing, checkedForSearch, onSelectAlbum, onSearch
       />
     </Group>
   );
-}
+});
+
+const ACCORDION_STYLES = {
+  item: { borderBottom: "none" },
+  control: { paddingLeft: 4, paddingRight: 4, paddingTop: 4, paddingBottom: 4 },
+  panel: { paddingLeft: 0, paddingRight: 0 },
+  content: { padding: 0 },
+} as const;
 
 export function AlbumSidebar({
   albums,
+  albumStatuses,
   albumsLoading,
   selectedAlbum,
   selectedSearchAlbumIds,
@@ -84,10 +128,16 @@ export function AlbumSidebar({
   onSelectAllForSearch,
   onClearSearchSelection,
 }: AlbumSidebarProps) {
-  const { yearGroups, sortedYears, ungrouped } = useMemo(() => {
+  // Albums checked for search are mirrored into a "Selected" accordion at the
+  // top (collapsed by default) for a quick overview — they also stay in their
+  // year groups below.
+  const { selectedAlbums, yearGroups, sortedYears, ungrouped } = useMemo(() => {
+    const selectedIdSet = new Set(selectedSearchAlbumIds);
+    const selectedList: DriveFileInfo[] = [];
     const groups = new Map<string, DriveFileInfo[]>();
     const ungroupedList: DriveFileInfo[] = [];
     for (const album of albums) {
+      if (selectedIdSet.has(album.id)) selectedList.push(album);
       if (album.year) {
         if (!groups.has(album.year)) groups.set(album.year, []);
         groups.get(album.year)!.push(album);
@@ -96,8 +146,20 @@ export function AlbumSidebar({
       }
     }
     const years = [...groups.keys()].sort((a, b) => b.localeCompare(a));
-    return { yearGroups: groups, sortedYears: years, ungrouped: ungroupedList };
-  }, [albums]);
+    return { selectedAlbums: selectedList, yearGroups: groups, sortedYears: years, ungrouped: ungroupedList };
+  }, [albums, selectedSearchAlbumIds]);
+
+  const renderRow = (album: DriveFileInfo) => (
+    <AlbumRow
+      key={album.id}
+      album={album}
+      status={albumStatuses[album.id]}
+      isBrowsing={selectedAlbum?.id === album.id}
+      checkedForSearch={selectedSearchAlbumIds.includes(album.id)}
+      onSelectAlbum={onSelectAlbum}
+      onSearchAlbumToggle={onSearchAlbumToggle}
+    />
+  );
 
   return (
     <Paper withBorder radius="md" p="md" h="100%">
@@ -114,21 +176,21 @@ export function AlbumSidebar({
           </Badge>
         </Group>
 
-        <Paper radius="sm" p="sm" style={{ background: "var(--mantine-color-brand-light)" }}>
+        <Paper radius="sm" p="sm" withBorder style={{ background: "var(--mantine-color-brand-light)" }}>
           <Group justify="space-between">
-            <Text size="xs" fw={600} c="brand.8">
+            <Text size="sm" fw={700}>
               Search scope
             </Text>
             <Group gap={4}>
-              <Button variant="subtle" size="compact-xs" onClick={onSelectAllForSearch}>
+              <Button variant="light" size="compact-xs" onClick={onSelectAllForSearch}>
                 All
               </Button>
-              <Button variant="subtle" size="compact-xs" onClick={onClearSearchSelection}>
+              <Button variant="light" size="compact-xs" onClick={onClearSearchSelection}>
                 None
               </Button>
             </Group>
           </Group>
-          <Text size="xs" c="dimmed" mt={4}>
+          <Text size="sm" mt={4}>
             {selectedSearchAlbumIds.length} of {albums.length} selected
           </Text>
         </Paper>
@@ -139,18 +201,25 @@ export function AlbumSidebar({
           </Center>
         ) : (
           <ScrollArea h={SIDEBAR_SCROLL_HEIGHT} offsetScrollbars>
+            {selectedAlbums.length > 0 && (
+              <Accordion chevronPosition="left" styles={ACCORDION_STYLES} mb="xs">
+                <Accordion.Item value="selected">
+                  <Accordion.Control>
+                    <Group gap="xs">
+                      <Text size="sm" fw={600}>Selected</Text>
+                      <Badge size="xs" variant="filled" color="brand">{selectedAlbums.length}</Badge>
+                    </Group>
+                  </Accordion.Control>
+                  <Accordion.Panel>
+                    <Stack gap={4}>{selectedAlbums.map(renderRow)}</Stack>
+                  </Accordion.Panel>
+                </Accordion.Item>
+              </Accordion>
+            )}
+
             {ungrouped.length > 0 && (
               <Stack gap={4} mb={sortedYears.length > 0 ? "xs" : 0}>
-                {ungrouped.map((album) => (
-                  <AlbumRow
-                    key={album.id}
-                    album={album}
-                    isBrowsing={selectedAlbum?.id === album.id}
-                    checkedForSearch={selectedSearchAlbumIds.includes(album.id)}
-                    onSelectAlbum={onSelectAlbum}
-                    onSearchAlbumToggle={onSearchAlbumToggle}
-                  />
-                ))}
+                {ungrouped.map(renderRow)}
               </Stack>
             )}
 
@@ -159,12 +228,7 @@ export function AlbumSidebar({
                 multiple
                 defaultValue={sortedYears}
                 chevronPosition="left"
-                styles={{
-                  item: { borderBottom: "none" },
-                  control: { paddingLeft: 4, paddingRight: 4, paddingTop: 4, paddingBottom: 4 },
-                  panel: { paddingLeft: 0, paddingRight: 0 },
-                  content: { padding: 0 },
-                }}
+                styles={ACCORDION_STYLES}
               >
                 {sortedYears.map((year) => (
                   <Accordion.Item key={year} value={year}>
@@ -173,16 +237,7 @@ export function AlbumSidebar({
                     </Accordion.Control>
                     <Accordion.Panel>
                       <Stack gap={4}>
-                        {yearGroups.get(year)!.map((album) => (
-                          <AlbumRow
-                            key={album.id}
-                            album={album}
-                            isBrowsing={selectedAlbum?.id === album.id}
-                            checkedForSearch={selectedSearchAlbumIds.includes(album.id)}
-                            onSelectAlbum={onSelectAlbum}
-                            onSearchAlbumToggle={onSearchAlbumToggle}
-                          />
-                        ))}
+                        {yearGroups.get(year)!.map(renderRow)}
                       </Stack>
                     </Accordion.Panel>
                   </Accordion.Item>

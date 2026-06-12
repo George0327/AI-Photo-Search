@@ -1,7 +1,9 @@
 package com.photosearch.indexing.ai.indexing;
 
 import com.photosearch.indexing.ai.client.AiServiceClient;
-import com.photosearch.indexing.ai.dto.AiIndexResponse;
+import com.photosearch.indexing.ai.dto.AiBatchIndexItemResult;
+import com.photosearch.indexing.ai.dto.AiBatchIndexResponse;
+import com.photosearch.indexing.ai.dto.AiImagePayload;
 import com.photosearch.indexing.album.Album;
 import com.photosearch.indexing.drive.GoogleDriveService;
 import com.photosearch.indexing.media.IndexingStatus;
@@ -10,10 +12,15 @@ import com.photosearch.indexing.media.MediaItemRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
@@ -28,15 +35,21 @@ public class MediaItemIndexingService {
     private final AiServiceClient aiServiceClient;
     private final MediaItemRepository mediaItemRepository;
     private final Executor indexingExecutor;
+    private final Executor downloadExecutor;
+    private final int batchSize;
 
     public MediaItemIndexingService(GoogleDriveService googleDriveService,
                                     AiServiceClient aiServiceClient,
                                     MediaItemRepository mediaItemRepository,
-                                    @Qualifier("indexingExecutor") Executor indexingExecutor) {
+                                    @Qualifier("indexingExecutor") Executor indexingExecutor,
+                                    @Qualifier("downloadExecutor") Executor downloadExecutor,
+                                    @Value("${app.indexing.batch-size:8}") int batchSize) {
         this.googleDriveService = googleDriveService;
         this.aiServiceClient = aiServiceClient;
         this.mediaItemRepository = mediaItemRepository;
         this.indexingExecutor = indexingExecutor;
+        this.downloadExecutor = downloadExecutor;
+        this.batchSize = Math.max(1, batchSize);
     }
 
     public MediaIndexingResult indexMediaItems(Album album, List<MediaItem> mediaItems) {
@@ -44,65 +57,101 @@ public class MediaItemIndexingService {
         AtomicInteger indexedCount = new AtomicInteger(0);
         CopyOnWriteArrayList<DriveIndexFailure> failures = new CopyOnWriteArrayList<>();
 
-        List<CompletableFuture<Void>> futures = mediaItems.stream()
-                .map(item -> {
-                    String fileId = item.getDriveFileId();
-                    String filename = item.getFilename();
-                    String mimeType = item.getMimeType();
-                    return CompletableFuture.runAsync(() -> {
-                        if (indexSingleMediaItem(albumFolderId, item, fileId, filename, mimeType, failures)) {
-                            indexedCount.incrementAndGet();
-                        }
-                    }, indexingExecutor);
-                })
-                .toList();
+        List<MediaItem> indexable = new ArrayList<>();
+        for (MediaItem item : mediaItems) {
+            if (item.isDeletedInDrive()) {
+                failures.add(new DriveIndexFailure(item.getDriveFileId(), item.getFilename(),
+                        "Skipped: media item is marked deleted in Drive."));
+            } else {
+                indexable.add(item);
+            }
+        }
+
+        // Chunks run in parallel on the indexing pool; each chunk is downloaded
+        // from Drive and sent to the AI service as a single batch request so the
+        // AI service can encode it in one forward pass and save its index once.
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
+        for (int start = 0; start < indexable.size(); start += batchSize) {
+            List<MediaItem> chunk = indexable.subList(start, Math.min(start + batchSize, indexable.size()));
+            futures.add(CompletableFuture.runAsync(
+                    () -> indexChunk(albumFolderId, chunk, indexedCount, failures), indexingExecutor));
+        }
 
         CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
         return new MediaIndexingResult(indexedCount.get(), failures);
     }
 
-    private boolean indexSingleMediaItem(String albumFolderId, MediaItem mediaItem,
-                                         String fileId, String filename, String mimeType,
-                                         List<DriveIndexFailure> failures) {
-        try {
-            if (mediaItem.isDeletedInDrive()) {
-                failures.add(new DriveIndexFailure(fileId, filename,
-                        "Skipped: media item is marked deleted in Drive."));
-                return false;
-            }
-            log.info("Indexing [{}]", filename);
-            mediaItem.setIndexingStatus(IndexingStatus.INDEXING);
-            mediaItem.setIndexingError(null);
-            mediaItemRepository.save(mediaItem);
-
-            byte[] imageBytes = googleDriveService.downloadFileBytes(fileId);
-            AiIndexResponse response = aiServiceClient.indexAlbumImage(
-                    albumFolderId, fileId, filename, mimeType, imageBytes);
-
-            if (response == null || !response.success()) {
-                String error = response != null ? response.message() : "No response from AI service.";
-                markFailed(mediaItem, fileId, filename, error, failures);
-                return false;
-            }
-
-            log.info("Indexed  [{}]", filename);
-            mediaItem.setIndexingStatus(IndexingStatus.INDEXED);
-            mediaItem.setFaissIndexedAt(Instant.now());
-            mediaItem.setIndexingError(null);
-            mediaItemRepository.save(mediaItem);
-            return true;
-        } catch (Exception e) {
-            log.warn("Failed   [{}]: {}", filename, e.getMessage());
-            markFailed(mediaItem, fileId, filename, e.getMessage(), failures);
-            return false;
+    private void indexChunk(String albumFolderId, List<MediaItem> chunk,
+                            AtomicInteger indexedCount, List<DriveIndexFailure> failures) {
+        for (MediaItem item : chunk) {
+            item.setIndexingStatus(IndexingStatus.INDEXING);
+            item.setIndexingError(null);
         }
+        mediaItemRepository.saveAll(chunk);
+
+        // Download the whole chunk in parallel — Drive latency, not the AI
+        // service, dominates otherwise.
+        Map<MediaItem, CompletableFuture<byte[]>> downloads = new LinkedHashMap<>();
+        for (MediaItem item : chunk) {
+            downloads.put(item, CompletableFuture.supplyAsync(
+                    () -> googleDriveService.downloadFileBytes(item.getDriveFileId()), downloadExecutor));
+        }
+
+        List<AiImagePayload> payloads = new ArrayList<>();
+        List<MediaItem> uploaded = new ArrayList<>();
+        for (Map.Entry<MediaItem, CompletableFuture<byte[]>> download : downloads.entrySet()) {
+            MediaItem item = download.getKey();
+            try {
+                byte[] imageBytes = download.getValue().join();
+                payloads.add(new AiImagePayload(item.getDriveFileId(), item.getFilename(),
+                        item.getMimeType(), imageBytes));
+                uploaded.add(item);
+            } catch (Exception e) {
+                Throwable cause = e.getCause() != null ? e.getCause() : e;
+                log.warn("Download failed [{}]: {}", item.getFilename(), cause.getMessage());
+                markFailed(item, "Drive download failed: " + cause.getMessage(), failures);
+            }
+        }
+        if (uploaded.isEmpty()) return;
+
+        AiBatchIndexResponse response;
+        try {
+            log.info("Indexing batch of {} image(s)", uploaded.size());
+            response = aiServiceClient.indexAlbumImageBatch(albumFolderId, payloads);
+        } catch (Exception e) {
+            log.warn("AI batch indexing failed: {}", e.getMessage());
+            for (MediaItem item : uploaded) markFailed(item, e.getMessage(), failures);
+            return;
+        }
+
+        Map<String, AiBatchIndexItemResult> resultsByImageId = new HashMap<>();
+        if (response != null && response.results() != null) {
+            for (AiBatchIndexItemResult result : response.results()) {
+                resultsByImageId.put(result.imageId(), result);
+            }
+        }
+
+        for (MediaItem item : uploaded) {
+            AiBatchIndexItemResult result = resultsByImageId.get(item.getDriveFileId());
+            if (result != null && result.success()) {
+                item.setIndexingStatus(IndexingStatus.INDEXED);
+                item.setFaissIndexedAt(Instant.now());
+                item.setIndexingError(null);
+                indexedCount.incrementAndGet();
+            } else {
+                String error = result != null ? result.message() : "No result from AI service for this image.";
+                item.setIndexingStatus(IndexingStatus.FAILED);
+                item.setIndexingError(error);
+                failures.add(new DriveIndexFailure(item.getDriveFileId(), item.getFilename(), error));
+            }
+        }
+        mediaItemRepository.saveAll(uploaded);
     }
 
-    private void markFailed(MediaItem mediaItem, String fileId, String filename,
-                             String error, List<DriveIndexFailure> failures) {
+    private void markFailed(MediaItem mediaItem, String error, List<DriveIndexFailure> failures) {
         mediaItem.setIndexingStatus(IndexingStatus.FAILED);
         mediaItem.setIndexingError(error);
         mediaItemRepository.save(mediaItem);
-        failures.add(new DriveIndexFailure(fileId, filename, error));
+        failures.add(new DriveIndexFailure(mediaItem.getDriveFileId(), mediaItem.getFilename(), error));
     }
 }

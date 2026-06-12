@@ -1,27 +1,38 @@
 http:
+  middlewares:
+    security-headers:
+      headers:
+        frameDeny: true
+        contentTypeNosniff: true
+        referrerPolicy: "strict-origin-when-cross-origin"
+
   routers:
     auth:
       entryPoints: [web]
       rule: "PathPrefix(`/api/auth`) || PathPrefix(`/api/admin/users`) || PathPrefix(`/login`) || PathPrefix(`/oauth2`) || Path(`/error`)"
       service: auth
+      middlewares: [security-headers]
       priority: 10
 
     indexing:
       entryPoints: [web]
       rule: "PathPrefix(`/api/drive`) || PathPrefix(`/api/admin/ai`)"
       service: indexing
+      middlewares: [security-headers]
       priority: 10
 
     search:
       entryPoints: [web]
       rule: "PathPrefix(`/api/search`)"
       service: search
+      middlewares: [security-headers]
       priority: 10
 
     frontend:
       entryPoints: [web]
       rule: "PathPrefix(`/`)"
       service: frontend
+      middlewares: [security-headers]
       priority: 1
 
   services:
