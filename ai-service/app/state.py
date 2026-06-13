@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 from fastapi import Header, HTTPException
 
+from app import config
 from app.clip_model import ClipModel
 from app.detection_faiss_store import DetectionFaissStore
 from app.face_model import FaceModel
@@ -37,9 +38,16 @@ _face_stores: dict[str, DetectionFaissStore] = {}
 _album_locks: dict[str, asyncio.Lock] = {}
 _face_locks: dict[str, asyncio.Lock] = {}
 
-# Thread pool for CPU-bound ML inference — runs outside the per-album lock.
-# PyTorch releases the GIL during C++ ops, so os.cpu_count() workers gives real parallelism.
-ml_executor = ThreadPoolExecutor(max_workers=os.cpu_count() or 4)
+# Thread pool for CPU-bound work (image decode, FAISS I/O, CLIP) — runs outside
+# the per-album lock. PyTorch releases the GIL during C++ ops, so multiple
+# workers give real parallelism. Sizing comes from config (0 = os.cpu_count()).
+ml_executor = ThreadPoolExecutor(max_workers=config.ML_EXECUTOR_WORKERS or (os.cpu_count() or 4))
+
+# Pool for InsightFace GPU inference. Defaults to ONE worker because the GPU
+# executes inferences serially anyway and the onnxruntime session is not
+# concurrency-safe. Image decode stays on ml_executor (parallel) and is pipelined
+# with this — see routers/faces.py. Tune via config.FACE_INFERENCE_CONCURRENCY.
+face_executor = ThreadPoolExecutor(max_workers=max(1, config.FACE_INFERENCE_CONCURRENCY))
 
 
 def _get_lock(d: dict, album_id: str) -> asyncio.Lock:

@@ -4,11 +4,7 @@ import com.photosearch.indexing.sync.SyncRun;
 import com.photosearch.indexing.sync.SyncRunRepository;
 import com.photosearch.indexing.sync.SyncStatus;
 import com.photosearch.indexing.sync.SyncType;
-import com.photosearch.indexing.user.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -18,18 +14,16 @@ import java.time.Instant;
 public class SyncRunService {
 
     private final SyncRunRepository syncRunRepository;
-    private final UserRepository userRepository;
 
     public SyncRun start(SyncType type, String targetAlbumDriveId) {
-        SyncRun.SyncRunBuilder builder = SyncRun.builder()
+        // Caller identity lives in identity_db (auth-service); indexing-service no
+        // longer maps the users table, so started_by_user_id is left unset here.
+        // (Identity is resolved via the auth /api/auth/me endpoint, not the DB.)
+        SyncRun syncRun = SyncRun.builder()
                 .type(type).status(SyncStatus.RUNNING)
-                .targetAlbumDriveId(targetAlbumDriveId).startedAt(Instant.now());
-
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth != null && auth.getPrincipal() instanceof OidcUser oidcUser) {
-            userRepository.findByGoogleSub(oidcUser.getSubject()).ifPresent(builder::startedBy);
-        }
-        return syncRunRepository.save(builder.build());
+                .targetAlbumDriveId(targetAlbumDriveId).startedAt(Instant.now())
+                .build();
+        return syncRunRepository.save(syncRun);
     }
 
     public void setTargetAlbum(SyncRun syncRun, String driveAlbumId, String title) {

@@ -42,5 +42,7 @@ build/
 coverage/
 tmp/
 
-# Thesis
+# Docs
 docs/thesis/
+CLAUDE.md
+docs/poster.tex

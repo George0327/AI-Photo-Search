@@ -238,7 +238,6 @@ export function useAdminIndexing() {
     anyAlbumBusy,
     failures,
     error,
-    loadAlbumStatuses,
     syncAlbumStatuses,
     handleIndexAlbum,
     handleReindexAlbum,

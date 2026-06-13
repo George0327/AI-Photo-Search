@@ -5,25 +5,32 @@ import open_clip
 import io
 from pillow_heif import register_heif_opener
 
+from app import config
+
 register_heif_opener()
 
 
 class ClipModel:
-    def __init__(self, model_name: str = "ViT-L-14", pretrained: str = "openai") -> None:
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.model_name = model_name
-        self.pretrained = pretrained
+    def __init__(self, model_name: str | None = None, pretrained: str | None = None) -> None:
+        self.device = "cuda" if config.use_cuda() else "cpu"
+        self.model_name = model_name or config.CLIP_MODEL_NAME
+        self.pretrained = pretrained or config.CLIP_PRETRAINED
+        # fp16 only on GPU — halves resident VRAM so CLIP can share a small card
+        # with the face model. CPU stays fp32 (fp16 is slow/unsupported on CPU).
+        self.fp16 = self.device == "cuda" and config.CLIP_PRECISION == "fp16"
+        self.dtype = torch.float16 if self.fp16 else torch.float32
+        # Upper bound on images per forward pass; keeps memory bounded regardless
+        # of how many files a single batch request carries.
+        self.chunk_size = config.CLIP_ENCODE_CHUNK_SIZE
         self.model, _, self.preprocess = open_clip.create_model_and_transforms(
-            model_name=model_name,
-            pretrained=pretrained,
+            model_name=self.model_name,
+            pretrained=self.pretrained,
         )
-        self.tokenizer = open_clip.get_tokenizer(model_name)
+        self.tokenizer = open_clip.get_tokenizer(self.model_name)
         self.model.eval()
         self.model.to(self.device)
-
-    # Upper bound on images per forward pass, keeps GPU/CPU memory bounded
-    # regardless of how many files a single batch request carries.
-    ENCODE_CHUNK_SIZE = 16
+        if self.fp16:
+            self.model.half()
 
     @staticmethod
     def _open_image(image_input) -> Image.Image:
@@ -37,7 +44,7 @@ class ClipModel:
         """Accepts a file path or raw image bytes."""
 
         image = self._open_image(image_input)
-        image_tensor = self.preprocess(image).unsqueeze(0).to(self.device)
+        image_tensor = self.preprocess(image).unsqueeze(0).to(self.device, dtype=self.dtype)
 
         with torch.no_grad():
             features = self.model.encode_image(image_tensor)
@@ -63,14 +70,14 @@ class ClipModel:
             except Exception as exc:
                 errors[i] = f"Failed to decode image: {exc}"
 
-        for start in range(0, len(tensors), self.ENCODE_CHUNK_SIZE):
-            chunk = tensors[start : start + self.ENCODE_CHUNK_SIZE]
-            batch = torch.stack(chunk).to(self.device)
+        for start in range(0, len(tensors), self.chunk_size):
+            chunk = tensors[start : start + self.chunk_size]
+            batch = torch.stack(chunk).to(self.device, dtype=self.dtype)
             with torch.no_grad():
                 features = self.model.encode_image(batch)
                 features = features / features.norm(dim=-1, keepdim=True)
             features = features.cpu().numpy().astype("float32")
-            for row, input_index in enumerate(ok_indices[start : start + self.ENCODE_CHUNK_SIZE]):
+            for row, input_index in enumerate(ok_indices[start : start + self.chunk_size]):
                 embeddings[input_index] = features[row : row + 1]
 
         return embeddings, errors

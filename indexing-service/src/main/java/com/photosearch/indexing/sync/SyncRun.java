@@ -1,6 +1,5 @@
 package com.photosearch.indexing.sync;
 
-import com.photosearch.indexing.user.User;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -27,10 +26,10 @@ public class SyncRun {
     @Column(name = "target_album_drive_id", length = 255) private String targetAlbumDriveId;
     @Column(name = "target_album_title", length = 500) private String targetAlbumTitle;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "started_by_user_id")
-    @ToString.Exclude
-    private User startedBy;
+    // Soft reference to identity_db.users (owned by auth-service); no FK across
+    // the database boundary. Null unless the caller's numeric id is known.
+    @Column(name = "started_by_user_id")
+    private Long startedByUserId;
 
     @Column(name = "started_at", nullable = false) private Instant startedAt;
     private Instant finishedAt;

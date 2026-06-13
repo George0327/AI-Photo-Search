@@ -13,6 +13,7 @@ from app.state import (
     _face_locks,
     _get_lock,
     average_embeddings,
+    face_executor,
     face_index_path,
     face_items_path,
     get_cached_face_store,
@@ -64,15 +65,17 @@ async def index_album_faces_batch(
         else:
             pending.append((image_id, image_bytes))
 
-    # 2. Detect faces outside the lock — one executor task per image so the
-    #    thread pool works the batch in parallel.
-    async def detect(image_bytes: bytes):
+    # 2. Decode (CPU, parallel on ml_executor) then detect (GPU, serialized on
+    #    face_executor). One coroutine per image lets decodes run across all CPU
+    #    cores and pipeline with GPU inference, while the GPU step stays serial.
+    async def process(image_bytes: bytes):
         try:
-            return await loop.run_in_executor(ml_executor, state.face_model.extract_faces, image_bytes)
+            image = await loop.run_in_executor(ml_executor, state.face_model.decode_image, image_bytes)
+            return await loop.run_in_executor(face_executor, state.face_model.detect_on_image, image)
         except Exception as exc:
             return exc
 
-    detections = await asyncio.gather(*(detect(b) for _, b in pending))
+    detections = await asyncio.gather(*(process(b) for _, b in pending))
 
     # 3. Write all detections, then save the index once
     if pending:
@@ -117,9 +120,10 @@ async def index_album_faces(
     if store.is_image_indexed(image_id):
         return {"success": True, "face_count": 0, "message": f"Image {image_id} already face-indexed"}
 
-    # 2. Run face detection outside the lock
+    # 2. Decode (parallel pool) then detect (serialized GPU pool), outside the lock
     try:
-        faces = await loop.run_in_executor(ml_executor, state.face_model.extract_faces, image_bytes)
+        image = await loop.run_in_executor(ml_executor, state.face_model.decode_image, image_bytes)
+        faces = await loop.run_in_executor(face_executor, state.face_model.detect_on_image, image)
     except Exception as exc:
         return {"success": False, "face_count": 0, "message": f"Face detection failed: {exc}"}
 
@@ -150,7 +154,7 @@ async def search_faces(
     embeddings = []
     for f in files:
         image_bytes = await f.read()
-        embedding = await loop.run_in_executor(ml_executor, state.face_model.embedding_from_bytes, image_bytes)
+        embedding = await loop.run_in_executor(face_executor, state.face_model.embedding_from_bytes, image_bytes)
         if embedding is not None:
             embeddings.append(embedding)
 
