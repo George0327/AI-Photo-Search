@@ -12,7 +12,7 @@ import {
   stopIndexFaces,
 } from "../api/adminAiApi";
 import type { AlbumIndexStatus, DriveIndexFailure, DriveIndexResult } from "../api/adminAiApi";
-import { ADMIN_POLL_INTERVAL_MS } from "../constants";
+import { ADMIN_POLL_INTERVAL_MS, ADMIN_POLL_MAX_INTERVAL_MS } from "../constants";
 
 export function useAdminIndexing() {
   const [albums, setAlbums] = useState<AlbumIndexStatus[]>([]);
@@ -254,34 +254,56 @@ export function useAdminIndexing() {
   // album is indexing (covers runs started in another tab/session). Without the
   // local-operation condition, a click-started run would show no live progress:
   // the first status fetch only happens after the request completes.
-  // Paused while the tab is hidden; refreshes immediately when it becomes visible again.
-  useEffect(() => {
-    const isPolling = anyAlbumBusy || albums.some(a => a.indexingImages || a.indexingFaces);
-    if (!isPolling) return;
+  // The interval starts at ADMIN_POLL_INTERVAL_MS and backs off toward
+  // ADMIN_POLL_MAX_INTERVAL_MS while the indexing counts are unchanged, snapping
+  // back to the base the moment progress moves — responsive during active work,
+  // cheap on slow/stalled runs. Keyed on a stable boolean so it isn't torn down on
+  // every fetch. Paused while the tab is hidden; refreshes immediately on refocus.
+  const shouldPoll = anyAlbumBusy || albums.some(a => a.indexingImages || a.indexingFaces);
 
-    const refresh = async () => {
+  useEffect(() => {
+    if (!shouldPoll) return;
+
+    let delay = ADMIN_POLL_INTERVAL_MS;
+    let prevSignature = "";
+    let timer: ReturnType<typeof setTimeout>;
+
+    const statusSignature = (data: AlbumIndexStatus[]) =>
+      data
+        .map(a => `${a.indexedImages}:${a.faceIndexedImages}:${a.indexingImages}:${a.indexingFaces}`)
+        .join("|");
+
+    const tick = async () => {
       try {
         const data = await fetchAlbumIndexStatuses();
         setAlbums(data);
+        const signature = statusSignature(data);
+        delay = signature !== prevSignature
+          ? ADMIN_POLL_INTERVAL_MS
+          : Math.min(delay * 1.5, ADMIN_POLL_MAX_INTERVAL_MS);
+        prevSignature = signature;
       } catch (err) {
         console.warn("Polling album statuses failed:", err);
       }
+      timer = setTimeout(() => { if (!document.hidden) tick(); }, delay);
     };
 
-    const interval = setInterval(() => {
-      if (!document.hidden) refresh();
-    }, ADMIN_POLL_INTERVAL_MS);
+    timer = setTimeout(() => { if (!document.hidden) tick(); }, delay);
 
     const onVisibilityChange = () => {
-      if (!document.hidden) refresh();
+      if (!document.hidden) {
+        delay = ADMIN_POLL_INTERVAL_MS;
+        clearTimeout(timer);
+        tick();
+      }
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
-      clearInterval(interval);
+      clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [albums, anyAlbumBusy]);
+  }, [shouldPoll]);
 
   return {
     albums,

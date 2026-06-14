@@ -2,7 +2,6 @@ package com.photosearch.indexing.ai.client;
 
 import com.photosearch.indexing.ai.dto.AiBatchIndexResponse;
 import com.photosearch.indexing.ai.dto.AiFaceBatchIndexResponse;
-import com.photosearch.indexing.ai.dto.AiFaceIndexResponse;
 import com.photosearch.indexing.ai.dto.AiImagePayload;
 import com.photosearch.indexing.ai.dto.AiIndexResponse;
 import org.slf4j.Logger;
@@ -65,15 +64,6 @@ public class AiServiceClient {
                 request, AiFaceBatchIndexResponse.class));
     }
 
-    public AiFaceIndexResponse indexAlbumFaces(String albumId, String imageId,
-            String fileName, String mimeType, byte[] imageBytes) {
-        HttpEntity<MultiValueMap<String, Object>> request =
-                buildImageMultipart(imageId, fileName, mimeType, imageBytes);
-        return withRetry("index faces", () -> restTemplate.postForObject(
-                properties.getBaseUrl() + "/index/albums/" + albumId + "/faces",
-                request, AiFaceIndexResponse.class));
-    }
-
     /**
      * Retries transient failures (connection problems, AI service 5xx) with
      * exponential backoff. Client errors (4xx) are not retried.
@@ -105,17 +95,6 @@ public class AiServiceClient {
                     fileHeaders(image.mimeType())));
             body.add("image_ids", image.imageId());
         }
-        HttpHeaders headers = createInternalHeaders();
-        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
-        return new HttpEntity<>(body, headers);
-    }
-
-    private HttpEntity<MultiValueMap<String, Object>> buildImageMultipart(
-            String imageId, String fileName, String mimeType, byte[] imageBytes) {
-        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
-        body.add("file", new HttpEntity<>(fileResource(fileName, imageBytes), fileHeaders(mimeType)));
-        body.add("image_id", imageId);
-
         HttpHeaders headers = createInternalHeaders();
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
         return new HttpEntity<>(body, headers);

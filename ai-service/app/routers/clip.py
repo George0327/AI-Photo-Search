@@ -91,38 +91,6 @@ async def index_album_batch(
             "results": ordered}
 
 
-@router.post("/index/albums/{album_id}/stream")
-async def index_album_stream(
-    album_id: str,
-    file: UploadFile = File(...),
-    image_id: str = Form(...),
-    _: None = Depends(verify_internal_api_key),
-):
-    image_bytes = await file.read()
-    loop = asyncio.get_running_loop()
-
-    # 1. Quick existence check
-    async with _get_lock(_album_locks, album_id):
-        store = await loop.run_in_executor(ml_executor, get_cached_store, album_id)
-    if store.contains(image_id):
-        return {"success": True, "message": f"Image {image_id} already indexed in album {album_id}"}
-
-    # 2. Run CLIP inference outside the lock (concurrent across parallel requests)
-    try:
-        vector = await loop.run_in_executor(ml_executor, state.model.image_to_embedding, image_bytes)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Failed to process image: {exc}")
-
-    # 3. Write to FAISS (double-check in case another request raced us)
-    async with _get_lock(_album_locks, album_id):
-        store = await loop.run_in_executor(ml_executor, get_cached_store, album_id)
-        if not store.contains(image_id):
-            store.add(vector, image_id)
-            await loop.run_in_executor(ml_executor, save_album_store, album_id, store)
-
-    return {"success": True, "message": f"Successfully indexed image {image_id}"}
-
-
 @router.post("/search", response_model=SearchResponse)
 async def search(
     request: SearchRequest,

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 import app.state as state
 from app.detection_faiss_store import DetectionFaissStore
-from app.schemas import FaceBatchIndexResponse, FaceIndexResponse, FaceSearchResponse
+from app.schemas import FaceBatchIndexResponse, FaceSearchResponse
 from app.state import (
     ALBUM_INDEX_ROOT,
     FACE_INDEX_DIM,
@@ -104,40 +104,6 @@ async def index_album_faces_batch(
             "results": ordered}
 
 
-@router.post("/index/albums/{album_id}/faces", response_model=FaceIndexResponse)
-async def index_album_faces(
-    album_id: str,
-    file: UploadFile = File(...),
-    image_id: str = Form(...),
-    _: None = Depends(verify_internal_api_key),
-):
-    image_bytes = await file.read()
-    loop = asyncio.get_running_loop()
-
-    # 1. Quick existence check
-    async with _get_lock(_face_locks, album_id):
-        store = await loop.run_in_executor(ml_executor, get_cached_face_store, album_id)
-    if store.is_image_indexed(image_id):
-        return {"success": True, "face_count": 0, "message": f"Image {image_id} already face-indexed"}
-
-    # 2. Decode (parallel pool) then detect (serialized GPU pool), outside the lock
-    try:
-        image = await loop.run_in_executor(ml_executor, state.face_model.decode_image, image_bytes)
-        faces = await loop.run_in_executor(face_executor, state.face_model.detect_on_image, image)
-    except Exception as exc:
-        return {"success": False, "face_count": 0, "message": f"Face detection failed: {exc}"}
-
-    # 3. Write to FAISS (double-check)
-    async with _get_lock(_face_locks, album_id):
-        store = await loop.run_in_executor(ml_executor, get_cached_face_store, album_id)
-        if not store.is_image_indexed(image_id):
-            for face in faces:
-                store.add(face["embedding"], image_id, face["bbox"], face["confidence"])
-            store.mark_processed(image_id)
-            await loop.run_in_executor(ml_executor, save_face_store, album_id, store)
-
-    return {"success": True, "face_count": len(faces),
-            "message": f"Indexed {len(faces)} face(s) for image {image_id}"}
 
 
 @router.post("/search/faces", response_model=FaceSearchResponse)

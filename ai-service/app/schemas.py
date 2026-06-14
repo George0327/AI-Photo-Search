@@ -54,12 +54,6 @@ class FaceBatchIndexResponse(BaseModel):
 
 # ── Face indexing / search ────────────────────────────────────────────────────
 
-class FaceIndexResponse(BaseModel):
-    success: bool
-    face_count: int
-    message: str
-
-
 class FaceSearchResultItem(BaseModel):
     item_id: str
     album_id: str
