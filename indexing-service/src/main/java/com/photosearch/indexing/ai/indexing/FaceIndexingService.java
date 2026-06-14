@@ -53,6 +53,7 @@ public class FaceIndexingService {
     private final SyncRunService syncRunService;
     private final Executor indexingExecutor;
     private final Executor downloadExecutor;
+    private final IndexingCancellationRegistry cancellationRegistry;
     private final int batchSize;
 
     public FaceIndexingService(GoogleDriveService googleDriveService,
@@ -64,6 +65,7 @@ public class FaceIndexingService {
                                SyncRunService syncRunService,
                                @Qualifier("indexingExecutor") Executor indexingExecutor,
                                @Qualifier("downloadExecutor") Executor downloadExecutor,
+                               IndexingCancellationRegistry cancellationRegistry,
                                @Value("${app.indexing.batch-size:8}") int batchSize) {
         this.googleDriveService = googleDriveService;
         this.aiServiceClient = aiServiceClient;
@@ -74,7 +76,13 @@ public class FaceIndexingService {
         this.syncRunService = syncRunService;
         this.indexingExecutor = indexingExecutor;
         this.downloadExecutor = downloadExecutor;
+        this.cancellationRegistry = cancellationRegistry;
         this.batchSize = Math.max(1, batchSize);
+    }
+
+    /** Requests that an in-progress face-indexing run for this album stop as soon as possible. */
+    public void requestStop(String driveAlbumId) {
+        cancellationRegistry.requestCancel(IndexingCancellationRegistry.Kind.FACE, driveAlbumId);
     }
 
     public DriveIndexResult indexNewFacesInAlbum(String driveAlbumId) {
@@ -132,6 +140,7 @@ public class FaceIndexingService {
         AtomicInteger indexed = new AtomicInteger(0);
         CopyOnWriteArrayList<DriveIndexFailure> failures = new CopyOnWriteArrayList<>();
 
+        cancellationRegistry.begin(IndexingCancellationRegistry.Kind.FACE, albumFolderId);
         try {
             // Same batching strategy as CLIP indexing: chunks in parallel on the
             // indexing pool, one AI request and one index save per chunk.
@@ -145,6 +154,7 @@ public class FaceIndexingService {
             CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
             if (indexed.get() > 0) album.setFaceIndexedAt(Instant.now());
         } finally {
+            cancellationRegistry.end(IndexingCancellationRegistry.Kind.FACE, albumFolderId);
             album.setIndexingFaces(false);
             albumRepository.save(album);
         }
@@ -157,6 +167,11 @@ public class FaceIndexingService {
 
     private void indexFaceChunk(String albumFolderId, List<MediaItem> chunk,
                                 AtomicInteger indexed, List<DriveIndexFailure> failures) {
+        // Stop requested: bail before touching any status so queued items stay
+        // NOT_INDEXED (resumable). Chunks already past this point finish normally.
+        if (cancellationRegistry.isCancelled(IndexingCancellationRegistry.Kind.FACE, albumFolderId)) {
+            return;
+        }
         for (MediaItem item : chunk) {
             item.setFaceIndexingStatus(IndexingStatus.INDEXING);
             item.setFaceIndexingError(null);

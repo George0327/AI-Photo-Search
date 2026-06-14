@@ -30,6 +30,12 @@ public class DriveAiIndexingService {
     private final AiServiceClient aiServiceClient;
     private final MediaItemRepository mediaItemRepository;
     private final AlbumRepository albumRepository;
+    private final IndexingCancellationRegistry cancellationRegistry;
+
+    /** Requests that an in-progress CLIP indexing run for this album stop as soon as possible. */
+    public void requestStop(String driveAlbumId) {
+        cancellationRegistry.requestCancel(IndexingCancellationRegistry.Kind.CLIP, driveAlbumId);
+    }
 
     public List<AlbumIndexStatus> getAlbumIndexStatuses() {
         List<Album> albums = albumRepository.findByEnabledTrueAndDeletedInDriveFalseOrderByTitleAsc();

@@ -46,6 +46,21 @@ export function postJson<T>(url: string): Promise<T> {
   return request<T>(url, { method: "POST" });
 }
 
+/** POST that expects no response body (e.g. a 200 with empty content). */
+export async function postVoid(url: string): Promise<void> {
+  const response = await fetch(`${BASE_URL}${url}`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (response.status === 401) {
+    dispatchSessionExpired();
+    throw new Error("Session expired");
+  }
+  if (!response.ok) {
+    throw new Error(await extractErrorMessage(response));
+  }
+}
+
 export function patchJson<T>(url: string, body: unknown): Promise<T> {
   return request<T>(url, {
     method: "PATCH",

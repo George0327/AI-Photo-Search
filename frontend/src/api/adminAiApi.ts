@@ -1,4 +1,4 @@
-import { fetchJson, postJson } from "./apiClient";
+import { fetchJson, postJson, postVoid } from "./apiClient";
 
 export type AlbumIndexStatus = {
   albumDatabaseId: number;
@@ -60,5 +60,13 @@ export function indexFaces(albumId: string): Promise<DriveIndexResult> {
 
 export function reindexFaces(albumId: string): Promise<DriveIndexResult> {
   return postJson<DriveIndexResult>(`/api/admin/ai/reindex-faces/${albumId}`);
+}
+
+export function stopIndexAlbum(albumId: string): Promise<void> {
+  return postVoid(`/api/admin/ai/stop-index-album/${albumId}`);
+}
+
+export function stopIndexFaces(albumId: string): Promise<void> {
+  return postVoid(`/api/admin/ai/stop-index-faces/${albumId}`);
 }
 

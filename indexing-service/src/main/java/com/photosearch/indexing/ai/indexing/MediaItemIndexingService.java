@@ -36,6 +36,7 @@ public class MediaItemIndexingService {
     private final MediaItemRepository mediaItemRepository;
     private final Executor indexingExecutor;
     private final Executor downloadExecutor;
+    private final IndexingCancellationRegistry cancellationRegistry;
     private final int batchSize;
 
     public MediaItemIndexingService(GoogleDriveService googleDriveService,
@@ -43,12 +44,14 @@ public class MediaItemIndexingService {
                                     MediaItemRepository mediaItemRepository,
                                     @Qualifier("indexingExecutor") Executor indexingExecutor,
                                     @Qualifier("downloadExecutor") Executor downloadExecutor,
+                                    IndexingCancellationRegistry cancellationRegistry,
                                     @Value("${app.indexing.batch-size:8}") int batchSize) {
         this.googleDriveService = googleDriveService;
         this.aiServiceClient = aiServiceClient;
         this.mediaItemRepository = mediaItemRepository;
         this.indexingExecutor = indexingExecutor;
         this.downloadExecutor = downloadExecutor;
+        this.cancellationRegistry = cancellationRegistry;
         this.batchSize = Math.max(1, batchSize);
     }
 
@@ -70,19 +73,29 @@ public class MediaItemIndexingService {
         // Chunks run in parallel on the indexing pool; each chunk is downloaded
         // from Drive and sent to the AI service as a single batch request so the
         // AI service can encode it in one forward pass and save its index once.
-        List<CompletableFuture<Void>> futures = new ArrayList<>();
-        for (int start = 0; start < indexable.size(); start += batchSize) {
-            List<MediaItem> chunk = indexable.subList(start, Math.min(start + batchSize, indexable.size()));
-            futures.add(CompletableFuture.runAsync(
-                    () -> indexChunk(albumFolderId, chunk, indexedCount, failures), indexingExecutor));
-        }
+        cancellationRegistry.begin(IndexingCancellationRegistry.Kind.CLIP, albumFolderId);
+        try {
+            List<CompletableFuture<Void>> futures = new ArrayList<>();
+            for (int start = 0; start < indexable.size(); start += batchSize) {
+                List<MediaItem> chunk = indexable.subList(start, Math.min(start + batchSize, indexable.size()));
+                futures.add(CompletableFuture.runAsync(
+                        () -> indexChunk(albumFolderId, chunk, indexedCount, failures), indexingExecutor));
+            }
 
-        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+        } finally {
+            cancellationRegistry.end(IndexingCancellationRegistry.Kind.CLIP, albumFolderId);
+        }
         return new MediaIndexingResult(indexedCount.get(), failures);
     }
 
     private void indexChunk(String albumFolderId, List<MediaItem> chunk,
                             AtomicInteger indexedCount, List<DriveIndexFailure> failures) {
+        // Stop requested: bail before touching any status so queued items stay
+        // NOT_INDEXED (resumable). Chunks already past this point finish normally.
+        if (cancellationRegistry.isCancelled(IndexingCancellationRegistry.Kind.CLIP, albumFolderId)) {
+            return;
+        }
         for (MediaItem item : chunk) {
             item.setIndexingStatus(IndexingStatus.INDEXING);
             item.setIndexingError(null);

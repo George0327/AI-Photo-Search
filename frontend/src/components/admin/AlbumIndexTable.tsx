@@ -1,17 +1,18 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Badge,
   Button,
   Card,
   Group,
   Loader,
+  Modal,
   Stack,
   Table,
   Text,
   Title,
   Tooltip,
 } from "@mantine/core";
-import { IconFaceId, IconSparkles } from "@tabler/icons-react";
+import { IconFaceId, IconPlayerStop, IconSparkles } from "@tabler/icons-react";
 import type { AlbumIndexStatus } from "../../api/adminAiApi";
 
 type AlbumIndexTableProps = {
@@ -20,12 +21,18 @@ type AlbumIndexTableProps = {
   reindexingAlbumId: string | null;
   indexingFacesAlbumId: string | null;
   reindexingFacesAlbumId: string | null;
+  stoppingClipId: string | null;
+  stoppingFacesId: string | null;
   anyBusy: boolean;
   onIndexAlbum: (album: AlbumIndexStatus) => void;
   onReindexAlbum: (album: AlbumIndexStatus) => void;
   onIndexFaces: (album: AlbumIndexStatus) => void;
   onReindexFaces: (album: AlbumIndexStatus) => void;
+  onStopIndex: (album: AlbumIndexStatus) => void;
+  onStopFaces: (album: AlbumIndexStatus) => void;
 };
+
+type StopTarget = { album: AlbumIndexStatus; kind: "clip" | "faces" };
 
 // Shared badge logic so the CLIP and Faces columns behave identically.
 function indexBadge(
@@ -49,12 +56,26 @@ export function AlbumIndexTable({
   reindexingAlbumId,
   indexingFacesAlbumId,
   reindexingFacesAlbumId,
+  stoppingClipId,
+  stoppingFacesId,
   anyBusy,
   onIndexAlbum,
   onReindexAlbum,
   onIndexFaces,
   onReindexFaces,
+  onStopIndex,
+  onStopFaces,
 }: AlbumIndexTableProps) {
+  // Which run the admin is about to stop (drives the confirmation modal).
+  const [stopTarget, setStopTarget] = useState<StopTarget | null>(null);
+
+  function confirmStop() {
+    if (!stopTarget) return;
+    if (stopTarget.kind === "clip") onStopIndex(stopTarget.album);
+    else onStopFaces(stopTarget.album);
+    setStopTarget(null);
+  }
+
   const { sortedKeys, grouped } = useMemo(() => {
     const m = new Map<string, AlbumIndexStatus[]>();
     for (const a of albums) {
@@ -166,49 +187,76 @@ export function AlbumIndexTable({
 
                       <Table.Td>
                         <Group gap="xs" wrap="wrap">
-                          <Button
-                            size="xs"
-                            leftSection={<IconSparkles size={14} />}
-                            onClick={() => onIndexAlbum(album)}
-                            loading={isIndexingNow}
-                            disabled={anyBusy || album.needsIndexImages === 0}
-                          >
-                            Index new
-                          </Button>
+                          {/* CLIP: while a run (index or reindex) is active, the
+                              two action buttons collapse into a single Stop. */}
+                          {isIndexingNow ? (
+                            <Button
+                              size="xs"
+                              color="red"
+                              leftSection={<IconPlayerStop size={14} />}
+                              loading={stoppingClipId === album.driveAlbumId}
+                              onClick={() => setStopTarget({ album, kind: "clip" })}
+                            >
+                              Stop
+                            </Button>
+                          ) : (
+                            <>
+                              <Button
+                                size="xs"
+                                leftSection={<IconSparkles size={14} />}
+                                onClick={() => onIndexAlbum(album)}
+                                disabled={anyBusy || album.needsIndexImages === 0}
+                              >
+                                Index new
+                              </Button>
 
-                          <Button
-                            size="xs"
-                            variant="light"
-                            color={album.deletedImages > 0 ? "red" : "gray"}
-                            onClick={() => onReindexAlbum(album)}
-                            loading={reindexingAlbumId === album.driveAlbumId}
-                            disabled={anyBusy || album.indexedImages === 0}
-                          >
-                            Reindex
-                          </Button>
+                              <Button
+                                size="xs"
+                                variant="light"
+                                color={album.deletedImages > 0 ? "red" : "gray"}
+                                onClick={() => onReindexAlbum(album)}
+                                disabled={anyBusy || album.indexedImages === 0}
+                              >
+                                Reindex
+                              </Button>
+                            </>
+                          )}
 
-                          <Button
-                            size="xs"
-                            variant="light"
-                            color="teal"
-                            leftSection={<IconFaceId size={14} />}
-                            onClick={() => onIndexFaces(album)}
-                            loading={indexingFacesAlbumId === album.driveAlbumId}
-                            disabled={anyBusy || album.faceNeedsIndexImages === 0}
-                          >
-                            Index new faces
-                          </Button>
+                          {/* Faces: same collapse-to-Stop behaviour. */}
+                          {isFacesIndexingNow ? (
+                            <Button
+                              size="xs"
+                              color="red"
+                              leftSection={<IconPlayerStop size={14} />}
+                              loading={stoppingFacesId === album.driveAlbumId}
+                              onClick={() => setStopTarget({ album, kind: "faces" })}
+                            >
+                              Stop faces
+                            </Button>
+                          ) : (
+                            <>
+                              <Button
+                                size="xs"
+                                variant="light"
+                                color="teal"
+                                leftSection={<IconFaceId size={14} />}
+                                onClick={() => onIndexFaces(album)}
+                                disabled={anyBusy || album.faceNeedsIndexImages === 0}
+                              >
+                                Index new faces
+                              </Button>
 
-                          <Button
-                            size="xs"
-                            variant="light"
-                            color="gray"
-                            onClick={() => onReindexFaces(album)}
-                            loading={reindexingFacesAlbumId === album.driveAlbumId}
-                            disabled={anyBusy || album.faceIndexedImages === 0}
-                          >
-                            Reindex faces
-                          </Button>
+                              <Button
+                                size="xs"
+                                variant="light"
+                                color="gray"
+                                onClick={() => onReindexFaces(album)}
+                                disabled={anyBusy || album.faceIndexedImages === 0}
+                              >
+                                Reindex faces
+                              </Button>
+                            </>
+                          )}
 
                         </Group>
                       </Table.Td>
@@ -226,6 +274,30 @@ export function AlbumIndexTable({
           <Text size="sm" c="dimmed">No albums found. Click "Sync &amp; Refresh" to load from Google Drive.</Text>
         </Stack>
       )}
+
+      <Modal
+        opened={stopTarget !== null}
+        onClose={() => setStopTarget(null)}
+        title={stopTarget?.kind === "faces" ? "Stop face indexing?" : "Stop indexing?"}
+        centered
+      >
+        <Stack gap="md">
+          <Text size="sm">
+            Stop {stopTarget?.kind === "faces" ? "face indexing" : "indexing"} of{" "}
+            <Text span fw={600}>{stopTarget?.album.title}</Text>? Photos already
+            indexed are kept; the rest stay unindexed and can be resumed later.
+            Batches already in progress will finish first.
+          </Text>
+          <Group justify="flex-end" gap="xs">
+            <Button variant="default" onClick={() => setStopTarget(null)}>
+              Keep indexing
+            </Button>
+            <Button color="red" leftSection={<IconPlayerStop size={14} />} onClick={confirmStop}>
+              Stop
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </Card>
   );
 }

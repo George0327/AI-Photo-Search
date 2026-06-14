@@ -8,6 +8,8 @@ import {
   indexFaces,
   reindexAlbum,
   reindexFaces,
+  stopIndexAlbum,
+  stopIndexFaces,
 } from "../api/adminAiApi";
 import type { AlbumIndexStatus, DriveIndexFailure, DriveIndexResult } from "../api/adminAiApi";
 import { ADMIN_POLL_INTERVAL_MS } from "../constants";
@@ -21,6 +23,11 @@ export function useAdminIndexing() {
   const [indexingAll, setIndexingAll] = useState(false);
   const [indexingFacesAlbumId, setIndexingFacesAlbumId] = useState<string | null>(null);
   const [reindexingFacesAlbumId, setReindexingFacesAlbumId] = useState<string | null>(null);
+
+  // Album whose stop request is in flight (so the Stop button can show a spinner
+  // until the run actually winds down and polling clears the indexing flags).
+  const [stoppingClipId, setStoppingClipId] = useState<string | null>(null);
+  const [stoppingFacesId, setStoppingFacesId] = useState<string | null>(null);
 
   const [failures, setFailures] = useState<DriveIndexFailure[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -172,6 +179,51 @@ export function useAdminIndexing() {
     );
   }
 
+  // Stop requests are fire-and-forget: the backend cancels cooperatively, so the
+  // run keeps going until in-flight batches finish. We flag the album as stopping
+  // (spinner) and let polling clear it once the indexing flag drops.
+  async function handleStopIndex(album: AlbumIndexStatus) {
+    setStoppingClipId(album.driveAlbumId);
+    try {
+      await stopIndexAlbum(album.driveAlbumId);
+      notifications.show({
+        title: "Stopping…",
+        message: `Stopping indexing of "${album.title}". Photos already indexed are kept.`,
+        color: "orange",
+        autoClose: 5000,
+      });
+    } catch (err) {
+      setStoppingClipId(null);
+      notifications.show({
+        title: "Could not stop",
+        message: err instanceof Error ? err.message : "Failed to request stop.",
+        color: "red",
+        autoClose: 5000,
+      });
+    }
+  }
+
+  async function handleStopFaces(album: AlbumIndexStatus) {
+    setStoppingFacesId(album.driveAlbumId);
+    try {
+      await stopIndexFaces(album.driveAlbumId);
+      notifications.show({
+        title: "Stopping…",
+        message: `Stopping face indexing of "${album.title}". Photos already indexed are kept.`,
+        color: "orange",
+        autoClose: 5000,
+      });
+    } catch (err) {
+      setStoppingFacesId(null);
+      notifications.show({
+        title: "Could not stop",
+        message: err instanceof Error ? err.message : "Failed to request stop.",
+        color: "red",
+        autoClose: 5000,
+      });
+    }
+  }
+
   useEffect(() => {
     loadAlbumStatuses();
   }, []);
@@ -192,6 +244,10 @@ export function useAdminIndexing() {
       setIndexingFacesAlbumId(activeFaces.driveAlbumId);
     else if (!activeFaces && indexingFacesAlbumId !== null && !operationInFlight.current)
       setIndexingFacesAlbumId(null);
+
+    // Once the run has actually wound down, drop the "stopping" spinner.
+    if (!activeClip && stoppingClipId !== null) setStoppingClipId(null);
+    if (!activeFaces && stoppingFacesId !== null) setStoppingFacesId(null);
   }, [albums]);
 
   // Poll while an operation we started is in flight OR a fetched status says an
@@ -235,6 +291,8 @@ export function useAdminIndexing() {
     indexingAll,
     indexingFacesAlbumId,
     reindexingFacesAlbumId,
+    stoppingClipId,
+    stoppingFacesId,
     anyAlbumBusy,
     failures,
     error,
@@ -244,5 +302,7 @@ export function useAdminIndexing() {
     handleIndexAllNewPhotos,
     handleIndexFaces,
     handleReindexFaces,
+    handleStopIndex,
+    handleStopFaces,
   };
 }

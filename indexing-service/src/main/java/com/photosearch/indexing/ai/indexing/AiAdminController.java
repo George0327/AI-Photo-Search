@@ -48,4 +48,16 @@ public class AiAdminController {
         return faceIndexingService.reindexFacesForAlbum(albumId);
     }
 
+    /** Cooperatively stop an in-progress CLIP (index/reindex) run for this album. */
+    @PostMapping("/stop-index-album/{albumId}")
+    public void stopIndexAlbum(@PathVariable String albumId) {
+        driveAiIndexingService.requestStop(albumId);
+    }
+
+    /** Cooperatively stop an in-progress face (index/reindex) run for this album. */
+    @PostMapping("/stop-index-faces/{albumId}")
+    public void stopIndexFaces(@PathVariable String albumId) {
+        faceIndexingService.requestStop(albumId);
+    }
+
 }
