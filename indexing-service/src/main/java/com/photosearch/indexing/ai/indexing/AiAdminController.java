@@ -1,6 +1,7 @@
 package com.photosearch.indexing.ai.indexing;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -34,6 +35,7 @@ public class AiAdminController {
     }
 
     @PostMapping("/index-all")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'OWNER')")
     public DriveIndexResult indexAll() {
         return driveAiIndexingService.indexNewPhotosInAllAlbums();
     }

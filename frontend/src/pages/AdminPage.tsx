@@ -14,8 +14,13 @@ import {
 import { IconAlertCircle, IconRefresh, IconSparkles } from "@tabler/icons-react";
 import { useAdminIndexing } from "../hooks/useAdminIndexing";
 import { AlbumIndexTable } from "../components/admin/AlbumIndexTable";
+import { isSuperAdmin } from "../utils/roles";
 
-export default function AdminPage() {
+type AdminPageProps = { currentUserAuthorities: string[] };
+
+export default function AdminPage({ currentUserAuthorities }: AdminPageProps) {
+  const canIndexAll = isSuperAdmin(currentUserAuthorities);
+
   const {
     albums,
     albumsLoading,
@@ -66,14 +71,16 @@ export default function AdminPage() {
               Refresh statuses
             </Button>
 
-            <Button
-              leftSection={<IconSparkles size={16} />}
-              onClick={handleIndexAllNewPhotos}
-              loading={indexingAll}
-              disabled={indexingAlbumId !== null || reindexingAlbumId !== null}
-            >
-              Index all new photos
-            </Button>
+            {canIndexAll && (
+              <Button
+                leftSection={<IconSparkles size={16} />}
+                onClick={handleIndexAllNewPhotos}
+                loading={indexingAll}
+                disabled={indexingAlbumId !== null || reindexingAlbumId !== null}
+              >
+                Index all new photos
+              </Button>
+            )}
           </Group>
         </Group>
 

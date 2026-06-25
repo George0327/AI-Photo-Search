@@ -4,9 +4,11 @@ import com.photosearch.search.ai.client.AiServiceClient;
 import com.photosearch.search.ai.dto.AiSearchResponse;
 import com.photosearch.search.ai.dto.AiSearchResult;
 import com.photosearch.search.drive.DriveFileInfo;
+import com.photosearch.search.drive.PhotoNaming;
 import com.photosearch.search.media.IndexingStatus;
 import com.photosearch.search.media.MediaItem;
 import com.photosearch.search.media.MediaItemRepository;
+import com.photosearch.search.saved.SavedSearchService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -20,12 +22,13 @@ public class PhotoSearchService {
 
     private final AiServiceClient aiServiceClient;
     private final MediaItemRepository mediaItemRepository;
+    private final SavedSearchService savedSearchService;
 
-    public PhotoSearchResponse searchPhotos(String query, int topK, List<String> albumIds) {
+    public PhotoSearchResponse searchPhotos(String query, int topK, List<String> albumIds, List<String> restrictToIds) {
         List<String> selectedAlbumIds = albumIds != null ? albumIds : List.of();
-        int aiTopK = Math.min(topK * 3, 100);
+        int aiTopK = Math.min(topK * 3, 1000);
 
-        AiSearchResponse aiResponse = aiServiceClient.search(query, aiTopK, selectedAlbumIds);
+        AiSearchResponse aiResponse = aiServiceClient.search(query, aiTopK, selectedAlbumIds, restrictToIds);
 
         if (aiResponse == null) throw new IllegalStateException("No response from AI service");
         if (!aiResponse.success() || aiResponse.results() == null || aiResponse.results().isEmpty())
@@ -52,12 +55,16 @@ public class PhotoSearchService {
             results.add(new PhotoSearchResult(result.score(), albumDriveFolderId, driveFileInfoFrom(mediaItem)));
         }
 
+        savedSearchService.save("TEXT", query, selectedAlbumIds,
+                results.stream().map(r -> r.file().getId()).toList());
         return new PhotoSearchResponse(query, topK, selectedAlbumIds, results);
     }
 
     private DriveFileInfo driveFileInfoFrom(MediaItem item) {
         return DriveFileInfo.builder()
-                .id(item.getDriveFileId()).name(item.getFilename()).mimeType(item.getMimeType())
+                .id(item.getDriveFileId())
+                .name(PhotoNaming.displayName(item.getAlbum().getTitle(), item.getFilename()))
+                .mimeType(item.getMimeType())
                 .parentId(item.getAlbum().getDriveFolderId()).thumbnailLink(item.getDriveThumbnailLink())
                 .createdTime(item.getCreatedInDriveAt()).modifiedTime(item.getModifiedInDriveAt())
                 .trashed(false).folder(false).build();

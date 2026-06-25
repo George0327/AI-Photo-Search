@@ -7,6 +7,7 @@ import com.photosearch.search.album.Album;
 import com.photosearch.search.media.IndexingStatus;
 import com.photosearch.search.media.MediaItem;
 import com.photosearch.search.media.MediaItemRepository;
+import com.photosearch.search.saved.SavedSearchService;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -19,7 +20,9 @@ class PhotoSearchServiceTest {
 
     private final AiServiceClient aiServiceClient = mock(AiServiceClient.class);
     private final MediaItemRepository mediaItemRepository = mock(MediaItemRepository.class);
-    private final PhotoSearchService service = new PhotoSearchService(aiServiceClient, mediaItemRepository);
+    private final SavedSearchService savedSearchService = mock(SavedSearchService.class);
+    private final PhotoSearchService service =
+            new PhotoSearchService(aiServiceClient, mediaItemRepository, savedSearchService);
 
     private static MediaItem mediaItem(String driveFileId, String albumFolderId) {
         Album album = Album.builder().driveFolderId(albumFolderId).title("Album").build();
@@ -33,7 +36,7 @@ class PhotoSearchServiceTest {
     }
 
     private void stubAiResults(AiSearchResult... results) {
-        when(aiServiceClient.search(anyString(), anyInt(), anyList()))
+        when(aiServiceClient.search(anyString(), anyInt(), anyList(), any()))
                 .thenReturn(new AiSearchResponse(true, "ok", "query", results.length, List.of(results)));
     }
 
@@ -47,7 +50,7 @@ class PhotoSearchServiceTest {
         when(mediaItemRepository.findSearchableByDriveFileIds(anyList(), eq(IndexingStatus.INDEXED)))
                 .thenReturn(List.of(mediaItem("file-a", "album-1"), mediaItem("file-c", "album-2")));
 
-        var response = service.searchPhotos("query", 2, null);
+        var response = service.searchPhotos("query", 2, null, null);
 
         assertEquals(2, response.results().size());
         assertEquals("file-a", response.results().get(0).file().getId());
@@ -56,13 +59,16 @@ class PhotoSearchServiceTest {
     }
 
     @Test
-    void oversamplesTheAiRequestCappedAtOneHundred() {
+    void oversamplesTheAiRequestCappedAtOneThousand() {
         stubAiResults();
-        service.searchPhotos("query", 10, null);
-        verify(aiServiceClient).search(eq("query"), eq(30), anyList());
+        service.searchPhotos("query", 10, null, null);
+        verify(aiServiceClient).search(eq("query"), eq(30), anyList(), any());
 
-        service.searchPhotos("query", 50, null);
-        verify(aiServiceClient).search(eq("query"), eq(100), anyList());
+        service.searchPhotos("query", 50, null, null);
+        verify(aiServiceClient).search(eq("query"), eq(150), anyList(), any());
+
+        service.searchPhotos("query", 500, null, null);
+        verify(aiServiceClient).search(eq("query"), eq(1000), anyList(), any());
     }
 
     @Test
@@ -73,7 +79,7 @@ class PhotoSearchServiceTest {
         when(mediaItemRepository.findSearchableByDriveFileIds(anyList(), eq(IndexingStatus.INDEXED)))
                 .thenReturn(List.of(mediaItem("file-a", "album-1"), mediaItem("file-c", "album-2")));
 
-        var response = service.searchPhotos("query", 10, List.of("album-2"));
+        var response = service.searchPhotos("query", 10, List.of("album-2"), null);
 
         assertEquals(1, response.results().size());
         assertEquals("file-c", response.results().get(0).file().getId());
@@ -81,10 +87,10 @@ class PhotoSearchServiceTest {
 
     @Test
     void returnsEmptyResponseWhenAiHasNoMatches() {
-        when(aiServiceClient.search(anyString(), anyInt(), anyList()))
+        when(aiServiceClient.search(anyString(), anyInt(), anyList(), any()))
                 .thenReturn(new AiSearchResponse(true, "ok", "query", 10, List.of()));
 
-        var response = service.searchPhotos("query", 10, null);
+        var response = service.searchPhotos("query", 10, null, null);
 
         assertTrue(response.results().isEmpty());
         verifyNoInteractions(mediaItemRepository);
@@ -92,7 +98,7 @@ class PhotoSearchServiceTest {
 
     @Test
     void failsLoudlyWhenAiServiceReturnsNothing() {
-        when(aiServiceClient.search(anyString(), anyInt(), anyList())).thenReturn(null);
-        assertThrows(IllegalStateException.class, () -> service.searchPhotos("query", 10, null));
+        when(aiServiceClient.search(anyString(), anyInt(), anyList(), any())).thenReturn(null);
+        assertThrows(IllegalStateException.class, () -> service.searchPhotos("query", 10, null, null));
     }
 }

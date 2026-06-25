@@ -46,10 +46,33 @@ export function postJson<T>(url: string): Promise<T> {
   return request<T>(url, { method: "POST" });
 }
 
+export function postJsonBody<T>(url: string, body: unknown): Promise<T> {
+  return request<T>(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
 /** POST that expects no response body (e.g. a 200 with empty content). */
 export async function postVoid(url: string): Promise<void> {
   const response = await fetch(`${BASE_URL}${url}`, {
     method: "POST",
+    credentials: "include",
+  });
+  if (response.status === 401) {
+    dispatchSessionExpired();
+    throw new Error("Session expired");
+  }
+  if (!response.ok) {
+    throw new Error(await extractErrorMessage(response));
+  }
+}
+
+/** DELETE that expects no response body. */
+export async function deleteVoid(url: string): Promise<void> {
+  const response = await fetch(`${BASE_URL}${url}`, {
+    method: "DELETE",
     credentials: "include",
   });
   if (response.status === 401) {

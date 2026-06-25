@@ -4,8 +4,10 @@ import com.photosearch.search.ai.client.AiServiceClient;
 import com.photosearch.search.ai.dto.AiFaceSearchResponse;
 import com.photosearch.search.ai.dto.AiFaceSearchResult;
 import com.photosearch.search.drive.DriveFileInfo;
+import com.photosearch.search.drive.PhotoNaming;
 import com.photosearch.search.media.MediaItem;
 import com.photosearch.search.media.MediaItemRepository;
+import com.photosearch.search.saved.SavedSearchService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -21,9 +23,11 @@ public class FaceSearchService {
 
     private final AiServiceClient aiServiceClient;
     private final MediaItemRepository mediaItemRepository;
+    private final SavedSearchService savedSearchService;
 
     public FaceSearchResponse searchByFace(List<MultipartFile> referenceFiles,
-                                            List<String> albumIds, int topK) throws IOException {
+                                            List<String> albumIds, int topK,
+                                            List<String> restrictToIds) throws IOException {
         List<byte[]> imageBytesList = new ArrayList<>();
         List<String> fileNames = new ArrayList<>();
         for (MultipartFile file : referenceFiles) {
@@ -32,7 +36,7 @@ public class FaceSearchService {
         }
 
         AiFaceSearchResponse aiResponse = aiServiceClient.searchByFace(
-                imageBytesList, fileNames, albumIds != null ? albumIds : List.of(), topK);
+                imageBytesList, fileNames, albumIds != null ? albumIds : List.of(), topK, restrictToIds);
 
         if (aiResponse == null || !aiResponse.success()
                 || aiResponse.results() == null || aiResponse.results().isEmpty()) {
@@ -57,12 +61,17 @@ public class FaceSearchService {
             results.add(new FaceSearchResult(r.score(), item.getAlbum().getDriveFolderId(),
                     driveFileInfoFrom(item), r.matchedBbox()));
         }
+
+        savedSearchService.save("FACE", null, albumIds,
+                results.stream().map(r -> r.file().getId()).toList());
         return new FaceSearchResponse(aiResponse.message(), results);
     }
 
     private DriveFileInfo driveFileInfoFrom(MediaItem item) {
         return DriveFileInfo.builder()
-                .id(item.getDriveFileId()).name(item.getFilename()).mimeType(item.getMimeType())
+                .id(item.getDriveFileId())
+                .name(PhotoNaming.displayName(item.getAlbum().getTitle(), item.getFilename()))
+                .mimeType(item.getMimeType())
                 .parentId(item.getAlbum().getDriveFolderId()).thumbnailLink(item.getDriveThumbnailLink())
                 .createdTime(item.getCreatedInDriveAt()).modifiedTime(item.getModifiedInDriveAt())
                 .trashed(false).folder(false).build();

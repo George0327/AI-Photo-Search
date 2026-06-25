@@ -5,13 +5,15 @@ import {
   Button,
   Container,
   Group,
+  Menu,
   Paper,
+  ScrollArea,
   Stack,
   Text,
   Title,
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
-import { IconAlertCircle, IconLayoutSidebar, IconRefresh } from "@tabler/icons-react";
+import { IconAlertCircle, IconHistory, IconLayoutSidebar, IconRefresh, IconTrash } from "@tabler/icons-react";
 import { useCallback, useState } from "react";
 
 import { AlbumSidebar } from "../components/AlbumSidebar";
@@ -39,6 +41,8 @@ export default function DriveGalleryPage() {
     searchQuery,
     topK,
     referenceFiles,
+    withinResults,
+    savedSearches,
     activePage,
     totalPages,
     firstVisible,
@@ -53,9 +57,12 @@ export default function DriveGalleryPage() {
     setSearchQuery,
     setTopK,
     setReferenceFiles,
+    setWithinResults,
     handleSearch,
     handleModeChange,
     clearSearch,
+    recallSearch,
+    clearRecentSearches,
     loadImages,
   } = useGallery();
 
@@ -136,17 +143,52 @@ export default function DriveGalleryPage() {
                       <Text size="sm" c="dimmed">{headerSubtitle}</Text>
                     </div>
                   </Group>
-                  {selectedAlbum && !isSearchActive && (
-                    <Button
-                      variant="light"
-                      size="sm"
-                      leftSection={<IconRefresh size={16} />}
-                      onClick={() => loadImages(selectedAlbum.id)}
-                      loading={imagesLoading}
-                    >
-                      Refresh
-                    </Button>
-                  )}
+                  <Group gap="xs">
+                    {savedSearches.length > 0 && (
+                      <Menu shadow="md" width={320} position="bottom-end">
+                        <Menu.Target>
+                          <Button variant="light" size="sm" color="gray"
+                                  leftSection={<IconHistory size={16} />}>
+                            Recent searches
+                          </Button>
+                        </Menu.Target>
+                        <Menu.Dropdown>
+                          <Menu.Label>Recent searches</Menu.Label>
+                          <ScrollArea.Autosize mah={320}>
+                            {savedSearches.map((s) => (
+                              <Menu.Item key={s.id} onClick={() => recallSearch(s.id)}>
+                                <Text size="sm" truncate>
+                                  {s.searchType === "FACE"
+                                    ? "Face search"
+                                    : `"${s.queryText ?? ""}"`}
+                                </Text>
+                                <Text size="xs" c="dimmed">{s.resultCount} results</Text>
+                              </Menu.Item>
+                            ))}
+                          </ScrollArea.Autosize>
+                          <Menu.Divider />
+                          <Menu.Item
+                            color="red"
+                            leftSection={<IconTrash size={16} />}
+                            onClick={clearRecentSearches}
+                          >
+                            Clear recent searches
+                          </Menu.Item>
+                        </Menu.Dropdown>
+                      </Menu>
+                    )}
+                    {selectedAlbum && !isSearchActive && (
+                      <Button
+                        variant="light"
+                        size="sm"
+                        leftSection={<IconRefresh size={16} />}
+                        onClick={() => loadImages(selectedAlbum.id)}
+                        loading={imagesLoading}
+                      >
+                        Refresh
+                      </Button>
+                    )}
+                  </Group>
                 </Group>
 
                 <SearchBar
@@ -156,10 +198,12 @@ export default function DriveGalleryPage() {
                   loading={searchLoading}
                   searchActive={isSearchActive}
                   referenceFiles={referenceFiles}
+                  withinResults={withinResults}
                   onChange={setSearchQuery}
                   onModeChange={handleModeChange}
                   onTopKChange={setTopK}
                   onReferenceFilesChange={setReferenceFiles}
+                  onWithinResultsChange={setWithinResults}
                   onSearch={handleSearch}
                   onClear={clearSearch}
                 />

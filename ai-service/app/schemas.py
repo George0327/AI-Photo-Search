@@ -7,8 +7,10 @@ from pydantic import BaseModel, Field
 
 class SearchRequest(BaseModel):
     query: str = Field(..., min_length=1, description="Natural language search query")
-    top_k: int = Field(default=10, ge=1, le=100)
+    top_k: int = Field(default=10, ge=1, le=1000)
     album_ids: List[str] = Field(default_factory=list)
+    # When set, restrict results to these photo IDs (search-within-results / refine).
+    restrict_ids: Optional[List[str]] = None
 
 
 class SearchResultItem(BaseModel):

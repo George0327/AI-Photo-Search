@@ -111,17 +111,24 @@ async def search(
         ml_executor, state.model.text_to_embedding, request.query
     )
 
+    # Optional "search within results": restrict matches to a prior result set.
+    restrict = set(request.restrict_ids) if request.restrict_ids else None
+
     async def search_album(album_id: str) -> list[dict]:
         # Get store reference under lock (load happens off the event loop), search outside lock
         async with _get_lock(_album_locks, album_id):
             store = await loop.run_in_executor(ml_executor, get_cached_store, album_id)
         if not store.items:
             return []
+        # When restricting, rank the whole album then filter so subset members
+        # are not crowded out of a small top_k.
+        k = len(store.items) if restrict is not None else request.top_k
         album_results = await loop.run_in_executor(
-            ml_executor, lambda s=store: s.search(query_vector, top_k=request.top_k)
+            ml_executor, lambda s=store: s.search(query_vector, top_k=k)
         )
         return [{"item_id": r["item_id"], "album_id": album_id, "score": r["score"]}
-                for r in album_results]
+                for r in album_results
+                if restrict is None or r["item_id"] in restrict]
 
     per_album_results = await asyncio.gather(*(search_album(a) for a in album_ids))
     merged_results = [r for album_results in per_album_results for r in album_results]

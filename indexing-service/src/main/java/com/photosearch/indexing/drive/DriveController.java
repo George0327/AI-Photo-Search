@@ -2,12 +2,17 @@ package com.photosearch.indexing.drive;
 
 import com.photosearch.indexing.ai.indexing.AlbumSearchStatus;
 import com.photosearch.indexing.ai.indexing.DriveAiIndexingService;
+import com.photosearch.indexing.album.Album;
+import com.photosearch.indexing.album.AlbumRepository;
+import com.photosearch.indexing.media.MediaItem;
+import com.photosearch.indexing.media.MediaItemRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/drive")
@@ -16,6 +21,8 @@ public class DriveController {
 
     private final GoogleDriveService googleDriveService;
     private final DriveAiIndexingService driveAiIndexingService;
+    private final AlbumRepository albumRepository;
+    private final MediaItemRepository mediaItemRepository;
 
     @GetMapping("/albums")
     public List<DriveFileInfo> listAlbums() {
@@ -33,7 +40,11 @@ public class DriveController {
 
     @GetMapping("/albums/{albumId}/images")
     public List<DriveFileInfo> listImages(@PathVariable String albumId) {
-        return googleDriveService.listImagesInAlbum(albumId);
+        List<DriveFileInfo> images = googleDriveService.listImagesInAlbum(albumId);
+        // Prefix each photo's display name with the (sanitized) event/album name.
+        albumRepository.findByDriveFolderId(albumId).ifPresent(album ->
+                images.forEach(img -> img.setName(PhotoNaming.displayName(album.getTitle(), img.getName()))));
+        return images;
     }
 
     @GetMapping("/images/{fileId}/content")
@@ -68,9 +79,15 @@ public class DriveController {
         }
         byte[] imageBytes = googleDriveService.downloadFileBytes(fileId);
         MediaType mediaType = parseImageMediaType(fileInfo.getMimeType());
+        // Download as "EventName_originalFilename" when we know the album; fall back to the raw name.
+        String downloadName = mediaItemRepository.findByDriveFileId(fileId)
+                .map(item -> PhotoNaming.displayName(
+                        Optional.ofNullable(item.getAlbum()).map(Album::getTitle).orElse(null),
+                        item.getFilename()))
+                .orElse(fileInfo.getName());
         return ResponseEntity.ok().contentType(mediaType)
                 .header(HttpHeaders.CONTENT_DISPOSITION,
-                        ContentDisposition.attachment().filename(fileInfo.getName(), StandardCharsets.UTF_8).build().toString())
+                        ContentDisposition.attachment().filename(downloadName, StandardCharsets.UTF_8).build().toString())
                 .body(imageBytes);
     }
 

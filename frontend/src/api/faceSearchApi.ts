@@ -17,6 +17,7 @@ export async function searchByFace(
   referenceFiles: File[],
   albumIds: string[],
   topK: number,
+  restrictToIds?: string[],
 ): Promise<FaceSearchResponse> {
   const formData = new FormData();
   for (const file of referenceFiles) {
@@ -26,6 +27,9 @@ export async function searchByFace(
     formData.append("albumIds", albumId);
   }
   formData.append("topK", String(topK));
+  if (restrictToIds) {
+    for (const id of restrictToIds) formData.append("restrictToIds", id);
+  }
 
   return postFormData<FaceSearchResponse>("/api/search/faces", formData);
 }

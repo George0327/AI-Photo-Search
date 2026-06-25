@@ -23,8 +23,9 @@ public class FaceSearchController {
     public FaceSearchService.FaceSearchResponse searchFaces(
             @RequestPart("files") List<MultipartFile> files,
             @RequestParam(required = false) List<String> albumIds,
-            @RequestParam(defaultValue = "10") @Min(1) @Max(100) int topK
+            @RequestParam(defaultValue = "10") @Min(1) @Max(1000) int topK,
+            @RequestParam(required = false) List<String> restrictToIds
     ) throws IOException {
-        return faceSearchService.searchByFace(files, albumIds, topK);
+        return faceSearchService.searchByFace(files, albumIds, topK, restrictToIds);
     }
 }

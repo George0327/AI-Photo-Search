@@ -136,7 +136,13 @@ export default function App() {
 
           <Route
             path="/admin"
-            element={elevated ? <AdminPage /> : <Navigate to="/" replace />}
+            element={
+              elevated ? (
+                <AdminPage currentUserAuthorities={user.authorities} />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
           />
 
           <Route

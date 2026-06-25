@@ -23,6 +23,10 @@ export function isElevated(authorities: string[]): boolean {
   );
 }
 
+export function isSuperAdmin(authorities: string[]): boolean {
+  return authorities.some((a) => a === "ROLE_SUPER_ADMIN" || a === "ROLE_OWNER");
+}
+
 export function assignableRoles(myRole: AppRole): AppRole[] {
   return (Object.keys(RANK) as AppRole[]).filter((r) => RANK[r] < RANK[myRole]);
 }

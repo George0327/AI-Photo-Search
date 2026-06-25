@@ -4,6 +4,8 @@ import type { AlbumSearchStatus, DriveFileInfo } from "../api/driveApi";
 import { fetchAlbums, fetchAlbumSearchStatuses, fetchImages } from "../api/driveApi";
 import { searchPhotos } from "../api/searchApi";
 import { searchByFace } from "../api/faceSearchApi";
+import { clearSavedSearches, fetchSavedSearches, recallSavedSearch } from "../api/savedSearchApi";
+import type { SavedSearchSummary } from "../api/savedSearchApi";
 import type { SearchMode } from "../components/SearchBar";
 import { MAX_TOP_K, MIN_TOP_K, PHOTOS_PER_PAGE } from "../constants";
 
@@ -51,6 +53,10 @@ export function useGallery() {
   const [activeSearchType, setActiveSearchType] = useState<SearchMode | null>(null);
   const [lastSearchQuery, setLastSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+
+  // "Search within results": the next search is restricted to the current result set.
+  const [withinResults, setWithinResults] = useState(false);
+  const [savedSearches, setSavedSearches] = useState<SavedSearchSummary[]>([]);
 
   const [albumsLoading, setAlbumsLoading] = useState(false);
   const [imagesLoading, setImagesLoading] = useState(false);
@@ -126,29 +132,72 @@ export function useGallery() {
     setSearchQuery("");
     setLastSearchQuery("");
     setReferenceFiles([]);
+    setWithinResults(false);
     setActivePage(1);
     setSearchParams({}, { replace: true });
   }, [setSearchParams]);
 
-  function handleModeChange(mode: SearchMode) {
-    setInputMode(mode);
-    if (isSearchActive) clearSearch();
+  async function loadSavedSearches() {
+    try {
+      setSavedSearches(await fetchSavedSearches());
+    } catch (err) {
+      console.warn("Failed to load saved searches:", err);
+    }
   }
 
-  async function runTextSearch(query: string, albumIds: string[]) {
+  async function clearRecentSearches() {
+    try {
+      await clearSavedSearches();
+      setSavedSearches([]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to clear recent searches.");
+    }
+  }
+
+  // Re-open a past search: load its (ranked) photos as the active result set.
+  async function recallSearch(id: number) {
+    try {
+      setError(null);
+      setSearchLoading(true);
+      setActivePage(1);
+      setWithinResults(false);
+      const data = await recallSavedSearch(id);
+      setSearchResults(data.results.map((r) => ({ score: 0, albumId: r.albumId, file: r.file })));
+      setActiveSearchType(data.searchType === "FACE" ? "face" : "text");
+      setLastSearchQuery(data.queryText ? data.queryText : "recalled search");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to open saved search.");
+    } finally {
+      setSearchLoading(false);
+    }
+  }
+
+  function handleModeChange(mode: SearchMode) {
+    setInputMode(mode);
+    // Normally switching modality starts fresh. But when "search within results"
+    // is on, keep the current results so the user can search the OTHER modality
+    // (text vs face) within them.
+    if (isSearchActive && !withinResults) clearSearch();
+  }
+
+  async function runTextSearch(query: string, albumIds: string[], restrictToIds?: string[]) {
     const effectiveTopK = clampTopK(topK);
     try {
       setError(null);
       setSearchLoading(true);
       setActivePage(1);
-      const data = await searchPhotos(query, effectiveTopK, albumIds);
+      const data = await searchPhotos(query, effectiveTopK, albumIds, restrictToIds);
       setSearchResults(data.results);
       setActiveSearchType("text");
-      setLastSearchQuery(query);
-      setSearchParams(
-        { q: query, topK: String(effectiveTopK), albums: albumIds.join(",") },
-        { replace: true },
-      );
+      setLastSearchQuery(restrictToIds ? `${query} (within results)` : query);
+      // Only plain searches are reflected in the URL; a refine can't be bookmarked.
+      if (!restrictToIds) {
+        setSearchParams(
+          { q: query, topK: String(effectiveTopK), albums: albumIds.join(",") },
+          { replace: true },
+        );
+      }
+      loadSavedSearches();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Search failed.");
     } finally {
@@ -157,7 +206,14 @@ export function useGallery() {
   }
 
   async function handleSearch() {
-    if (selectedSearchAlbumIds.length === 0) {
+    // "Search within results": restrict to the current results and scope to their albums.
+    const refine = withinResults && isSearchActive && searchResults.length > 0;
+    const restrictToIds = refine ? searchResults.map((r) => r.file.id) : undefined;
+    const effectiveAlbumIds = refine
+      ? [...new Set(searchResults.map((r) => r.albumId))]
+      : selectedSearchAlbumIds;
+
+    if (!refine && selectedSearchAlbumIds.length === 0) {
       setError("Select at least one album to search.");
       return;
     }
@@ -165,7 +221,7 @@ export function useGallery() {
     if (inputMode === "text") {
       const trimmed = searchQuery.trim();
       if (!trimmed) return;
-      await runTextSearch(trimmed, selectedSearchAlbumIds);
+      await runTextSearch(trimmed, effectiveAlbumIds, restrictToIds);
       return;
     }
 
@@ -179,10 +235,11 @@ export function useGallery() {
       setSearchLoading(true);
       setActivePage(1);
 
-      const data = await searchByFace(referenceFiles, selectedSearchAlbumIds, clampTopK(topK));
+      const data = await searchByFace(referenceFiles, effectiveAlbumIds, clampTopK(topK), restrictToIds);
       setSearchResults(data.results);
       setActiveSearchType("face");
-      setLastSearchQuery(`${referenceFiles.length} reference photo${referenceFiles.length > 1 ? "s" : ""}`);
+      setLastSearchQuery(`${referenceFiles.length} reference photo${referenceFiles.length > 1 ? "s" : ""}${refine ? " (within results)" : ""}`);
+      loadSavedSearches();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Search failed.");
     } finally {
@@ -201,7 +258,7 @@ export function useGallery() {
     return `${searchResults.length} matching photos found`;
   }
 
-  useEffect(() => { loadAlbums(); }, []);
+  useEffect(() => { loadAlbums(); loadSavedSearches(); }, []);
 
   useEffect(() => {
     if (selectedAlbum) {
@@ -266,6 +323,8 @@ export function useGallery() {
     searchQuery,
     topK,
     referenceFiles,
+    withinResults,
+    savedSearches,
     // pagination
     activePage,
     totalPages,
@@ -283,9 +342,12 @@ export function useGallery() {
     setSearchQuery,
     setTopK,
     setReferenceFiles,
+    setWithinResults,
     handleSearch,
     handleModeChange,
     clearSearch,
+    recallSearch,
+    clearRecentSearches,
     loadImages,
   };
 }

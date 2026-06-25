@@ -11,9 +11,9 @@ export const ADMIN_POLL_INTERVAL_MS = 3000;
 export const ADMIN_POLL_MAX_INTERVAL_MS = 15000;
 
 export const MIN_TOP_K = 1;
-export const MAX_TOP_K = 100;
+export const MAX_TOP_K = 1000;
 
-export const MAX_REFERENCE_FILES = 5;
+export const MAX_REFERENCE_FILES = 30;
 export const MAX_REFERENCE_FILE_SIZE_MB = 15;
 
 /** Page size used when listing users (org is domain-restricted, one page suffices). */

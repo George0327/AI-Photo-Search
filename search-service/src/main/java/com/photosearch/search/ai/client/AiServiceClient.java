@@ -33,8 +33,8 @@ public class AiServiceClient {
         this.restTemplate = restTemplate;
     }
 
-    public AiSearchResponse search(String query, int topK, List<String> albumIds) {
-        AiSearchRequest body = new AiSearchRequest(query, topK, albumIds);
+    public AiSearchResponse search(String query, int topK, List<String> albumIds, List<String> restrictIds) {
+        AiSearchRequest body = new AiSearchRequest(query, topK, albumIds, restrictIds);
         HttpHeaders headers = createInternalHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         return withRetry("search", () -> restTemplate.postForObject(properties.getBaseUrl() + "/search",
@@ -43,9 +43,9 @@ public class AiServiceClient {
 
     public AiFaceSearchResponse searchByFace(
             List<byte[]> referenceImages, List<String> fileNames,
-            List<String> albumIds, int topK) {
+            List<String> albumIds, int topK, List<String> restrictIds) {
         HttpEntity<MultiValueMap<String, Object>> request =
-                buildDetectionSearchRequest(referenceImages, fileNames, albumIds, topK);
+                buildDetectionSearchRequest(referenceImages, fileNames, albumIds, topK, restrictIds);
         return withRetry("face search", () -> restTemplate.postForObject(
                 properties.getBaseUrl() + "/search/faces", request, AiFaceSearchResponse.class));
     }
@@ -76,7 +76,7 @@ public class AiServiceClient {
 
     private HttpEntity<MultiValueMap<String, Object>> buildDetectionSearchRequest(
             List<byte[]> referenceImages, List<String> fileNames,
-            List<String> albumIds, int topK) {
+            List<String> albumIds, int topK, List<String> restrictIds) {
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
         for (int i = 0; i < referenceImages.size(); i++) {
             final byte[] bytes = referenceImages.get(i);
@@ -90,6 +90,7 @@ public class AiServiceClient {
         }
         albumIds.forEach(id -> body.add("album_ids", id));
         body.add("top_k", String.valueOf(topK));
+        if (restrictIds != null) restrictIds.forEach(id -> body.add("restrict_ids", id));
         HttpHeaders headers = createInternalHeaders();
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
         return new HttpEntity<>(body, headers);

@@ -112,9 +112,12 @@ async def search_faces(
     album_ids: List[str] = Form(default=[]),
     top_k: int = Form(default=10),
     threshold: float = Form(default=0.35),
+    restrict_ids: List[str] = Form(default=[]),
     _: None = Depends(verify_internal_api_key),
 ):
     loop = asyncio.get_running_loop()
+    # Optional "search within results": restrict matches to a prior result set.
+    restrict = set(restrict_ids) if restrict_ids else None
 
     # Extract face embeddings from all reference images (off the event loop)
     embeddings = []
@@ -150,10 +153,14 @@ async def search_faces(
             store = await loop.run_in_executor(ml_executor, get_cached_face_store, album_id)
         if not store.items:
             return []
+        # When restricting, rank the whole album then filter so subset members
+        # are not crowded out of a small top_k.
+        k = len(store.items) if restrict is not None else top_k
         album_results = await loop.run_in_executor(
-            ml_executor, lambda s=store: s.search(query_vector, top_k=top_k)
+            ml_executor, lambda s=store: s.search(query_vector, top_k=k)
         )
-        return [{**r, "album_id": album_id} for r in album_results]
+        return [{**r, "album_id": album_id} for r in album_results
+                if restrict is None or r["image_id"] in restrict]
 
     per_album_results = await asyncio.gather(*(search_album(a) for a in target_album_ids))
 

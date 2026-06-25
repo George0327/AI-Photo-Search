@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 import static com.photosearch.indexing.ai.indexing.IndexingConstants.NEEDS_INDEXING_STATUSES;
@@ -110,7 +111,11 @@ public class DriveAiIndexingService {
     public DriveIndexResult indexNewPhotosInAllAlbums() {
         SyncRun syncRun = syncRunService.start(SyncType.AI_INDEX_ALL, null);
         try {
-            List<Album> albums = driveAlbumSyncService.syncAllDriveAlbums();
+            List<Album> albums = new ArrayList<>(driveAlbumSyncService.syncAllDriveAlbums());
+            // Process newest events first. Albums are grouped by event year; sort by
+            // year descending (albums without a year last). Order within a year is irrelevant.
+            albums.sort(Comparator.comparing(Album::getYear,
+                    Comparator.nullsLast(Comparator.reverseOrder())));
             int totalIndexed = 0, totalMediaSeen = 0;
             List<DriveIndexFailure> allFailures = new ArrayList<>();
 

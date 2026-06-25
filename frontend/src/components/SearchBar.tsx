@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import {
   Button,
+  Checkbox,
   Group,
   Loader,
   NumberInput,
@@ -23,10 +24,12 @@ type SearchBarProps = {
   loading: boolean;
   searchActive: boolean;
   referenceFiles: File[];
+  withinResults: boolean;
   onChange: (value: string) => void;
   onModeChange: (mode: SearchMode) => void;
   onTopKChange: (value: string) => void;
   onReferenceFilesChange: (files: File[]) => void;
+  onWithinResultsChange: (value: boolean) => void;
   onSearch: () => void;
   onClear: () => void;
 };
@@ -38,10 +41,12 @@ export function SearchBar({
   loading,
   searchActive,
   referenceFiles,
+  withinResults,
   onChange,
   onModeChange,
   onTopKChange,
   onReferenceFilesChange,
+  onWithinResultsChange,
   onSearch,
   onClear,
 }: SearchBarProps) {
@@ -115,6 +120,15 @@ export function SearchBar({
           </Button>
         )}
       </Group>
+
+      {searchActive && (
+        <Checkbox
+          size="sm"
+          label="Search within these results"
+          checked={withinResults}
+          onChange={(e) => onWithinResultsChange(e.currentTarget.checked)}
+        />
+      )}
     </Stack>
   );
 }
