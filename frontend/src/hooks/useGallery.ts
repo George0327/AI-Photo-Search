@@ -154,7 +154,6 @@ export function useGallery() {
     }
   }
 
-  // Re-open a past search: load its (ranked) photos as the active result set.
   async function recallSearch(id: number) {
     try {
       setError(null);

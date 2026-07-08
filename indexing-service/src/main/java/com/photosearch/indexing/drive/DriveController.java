@@ -41,7 +41,6 @@ public class DriveController {
     @GetMapping("/albums/{albumId}/images")
     public List<DriveFileInfo> listImages(@PathVariable String albumId) {
         List<DriveFileInfo> images = googleDriveService.listImagesInAlbum(albumId);
-        // Prefix each photo's display name with the (sanitized) event/album name.
         albumRepository.findByDriveFolderId(albumId).ifPresent(album ->
                 images.forEach(img -> img.setName(PhotoNaming.displayName(album.getTitle(), img.getName()))));
         return images;
@@ -79,7 +78,6 @@ public class DriveController {
         }
         byte[] imageBytes = googleDriveService.downloadFileBytes(fileId);
         MediaType mediaType = parseImageMediaType(fileInfo.getMimeType());
-        // Download as "EventName_originalFilename" when we know the album; fall back to the raw name.
         String downloadName = mediaItemRepository.findByDriveFileId(fileId)
                 .map(item -> PhotoNaming.displayName(
                         Optional.ofNullable(item.getAlbum()).map(Album::getTitle).orElse(null),

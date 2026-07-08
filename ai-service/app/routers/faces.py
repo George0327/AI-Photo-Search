@@ -54,7 +54,6 @@ async def index_album_faces_batch(
     loop = asyncio.get_running_loop()
     results: dict[str, dict] = {}
 
-    # 1. Quick existence check (store load happens off the event loop)
     async with _get_lock(_face_locks, album_id):
         store = await loop.run_in_executor(ml_executor, get_cached_face_store, album_id)
     pending = []
@@ -65,9 +64,6 @@ async def index_album_faces_batch(
         else:
             pending.append((image_id, image_bytes))
 
-    # 2. Decode (CPU, parallel on ml_executor) then detect (GPU, serialized on
-    #    face_executor). One coroutine per image lets decodes run across all CPU
-    #    cores and pipeline with GPU inference, while the GPU step stays serial.
     async def process(image_bytes: bytes):
         try:
             image = await loop.run_in_executor(ml_executor, state.face_model.decode_image, image_bytes)
@@ -77,7 +73,6 @@ async def index_album_faces_batch(
 
     detections = await asyncio.gather(*(process(b) for _, b in pending))
 
-    # 3. Write all detections, then save the index once
     if pending:
         async with _get_lock(_face_locks, album_id):
             store = await loop.run_in_executor(ml_executor, get_cached_face_store, album_id)

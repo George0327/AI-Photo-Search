@@ -1,0 +1,14 @@
+[
+  {
+    "person": "Person A",
+    "album_ids": ["REPLACE_WITH_DRIVE_FOLDER_ID"],
+    "appears_in": ["REPLACE_WITH_DRIVE_FILE_ID", "REPLACE_WITH_DRIVE_FILE_ID"],
+    "references": ["REPLACE_WITH_DRIVE_FILE_ID", "REPLACE_WITH_DRIVE_FILE_ID", "REPLACE_WITH_DRIVE_FILE_ID"]
+  },
+  {
+    "person": "Person B",
+    "album_ids": [],
+    "appears_in": ["REPLACE_WITH_DRIVE_FILE_ID"],
+    "references": ["REPLACE_WITH_DRIVE_FILE_ID"]
+  }
+]

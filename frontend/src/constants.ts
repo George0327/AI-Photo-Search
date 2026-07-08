@@ -1,5 +1,3 @@
-// Shared UI constants
-
 export const PHOTOS_PER_PAGE = 20;
 
 export const SIDEBAR_WIDTH = 300;

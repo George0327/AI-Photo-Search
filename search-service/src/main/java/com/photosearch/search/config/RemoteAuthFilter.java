@@ -54,7 +54,6 @@ public class RemoteAuthFilter extends OncePerRequestFilter {
         String cookieHeader = buildCookieHeader(request);
 
         if (cookieHeader != null) {
-            // Check in-memory cache first to avoid calling auth-service on every request
             Object[] cached = tokenCache.get(cookieHeader);
             if (cached != null) {
                 if (System.currentTimeMillis() < (long) cached[1]) {

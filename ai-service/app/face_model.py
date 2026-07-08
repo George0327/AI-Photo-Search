@@ -11,7 +11,7 @@ from app import config
 
 class FaceModel:
     """
-    Wraps InsightFace buffalo_l (ArcFace R100) for face detection and embedding.
+    Wraps InsightFace buffalo_l (SCRFD detector + ArcFace R50 recogniser, w600k_r50) for face detection and embedding.
     Produces 512-dim L2-normalized embeddings suitable for cosine similarity search.
     """
 

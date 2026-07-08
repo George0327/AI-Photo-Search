@@ -49,7 +49,6 @@ async def index_album_batch(
     loop = asyncio.get_running_loop()
     results: dict[str, dict] = {}
 
-    # 1. Quick existence check (store load happens off the event loop)
     async with _get_lock(_album_locks, album_id):
         store = await loop.run_in_executor(ml_executor, get_cached_store, album_id)
     pending = []
@@ -60,13 +59,11 @@ async def index_album_batch(
         else:
             pending.append((image_id, image_bytes))
 
-    # 2. Run batched CLIP inference outside the lock
     if pending:
         embeddings, errors = await loop.run_in_executor(
             ml_executor, state.model.images_to_embeddings, [b for _, b in pending]
         )
 
-        # 3. Write all vectors, then save the index once
         async with _get_lock(_album_locks, album_id):
             store = await loop.run_in_executor(ml_executor, get_cached_store, album_id)
             added = False

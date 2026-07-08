@@ -1,0 +1,32 @@
+[
+  {
+    "person": "Person 1",
+    "album_ids": ["PUT_ALBUM_FOLDER_ID_HERE"],
+    "appears_in": [],
+    "references": []
+  },
+  {
+    "person": "Person 2",
+    "album_ids": ["PUT_ALBUM_FOLDER_ID_HERE"],
+    "appears_in": [],
+    "references": []
+  },
+  {
+    "person": "Person 3",
+    "album_ids": ["PUT_ALBUM_FOLDER_ID_HERE"],
+    "appears_in": [],
+    "references": []
+  },
+  {
+    "person": "Person 4",
+    "album_ids": ["PUT_ALBUM_FOLDER_ID_HERE"],
+    "appears_in": [],
+    "references": []
+  },
+  {
+    "person": "Person 5",
+    "album_ids": ["PUT_ALBUM_FOLDER_ID_HERE"],
+    "appears_in": [],
+    "references": []
+  }
+]

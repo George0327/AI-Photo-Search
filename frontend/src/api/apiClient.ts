@@ -54,7 +54,6 @@ export function postJsonBody<T>(url: string, body: unknown): Promise<T> {
   });
 }
 
-/** POST that expects no response body (e.g. a 200 with empty content). */
 export async function postVoid(url: string): Promise<void> {
   const response = await fetch(`${BASE_URL}${url}`, {
     method: "POST",
@@ -69,7 +68,6 @@ export async function postVoid(url: string): Promise<void> {
   }
 }
 
-/** DELETE that expects no response body. */
 export async function deleteVoid(url: string): Promise<void> {
   const response = await fetch(`${BASE_URL}${url}`, {
     method: "DELETE",

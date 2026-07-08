@@ -1,0 +1,14 @@
+[
+  {
+    "query": "two people shaking hands on a stage",
+    "category": "activity",
+    "album_ids": ["REPLACE_WITH_DRIVE_FOLDER_ID"],
+    "relevant": ["REPLACE_WITH_DRIVE_FILE_ID", "REPLACE_WITH_DRIVE_FILE_ID"]
+  },
+  {
+    "query": "group photo outdoors",
+    "category": "scene",
+    "album_ids": ["REPLACE_WITH_DRIVE_FOLDER_ID"],
+    "relevant": ["REPLACE_WITH_DRIVE_FILE_ID"]
+  }
+]
