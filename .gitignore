@@ -43,7 +43,9 @@ coverage/
 tmp/
 
 # Docs
-docs/thesis/
-docs/Thesis/
+docs/
 CLAUDE.md
-docs/poster.tex
+
+# Labelling contact sheets (contain member photos)
+eval/sheet_AG.html
+eval/sheet_AG1.html
