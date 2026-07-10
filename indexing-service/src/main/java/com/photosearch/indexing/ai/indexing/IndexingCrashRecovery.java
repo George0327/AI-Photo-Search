@@ -11,12 +11,7 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Indexing runs inside HTTP requests, so a crash or restart (e.g. an OOM kill)
- * strands items in INDEXING status and albums with the indexing-faces flag set.
- * Those would otherwise show as "Indexing…" forever and block new runs with a
- * 409 conflict. On startup, mark them FAILED so they can be retried incrementally.
- */
+/** On startup, marks items stranded in INDEXING (and albums with the face flag set) by a crash/restart as FAILED, so they don't show as "Indexing…" forever or block new runs with a 409. */
 @Component
 @RequiredArgsConstructor
 public class IndexingCrashRecovery implements ApplicationRunner {

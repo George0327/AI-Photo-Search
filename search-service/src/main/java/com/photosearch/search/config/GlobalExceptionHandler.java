@@ -27,8 +27,7 @@ public class GlobalExceptionHandler {
                 .body(Map.of("error", ex.getReason() != null ? ex.getReason() : ex.getMessage()));
     }
 
-    // Authorization denials from @PreAuthorize must surface as 403, not be swallowed
-    // by the catch-all below (which would report 500 for a forbidden request).
+    // AccessDenied (@PreAuthorize) must return 403, not fall through to the catch-all's 500.
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<Map<String, String>> handleAccessDenied(AccessDeniedException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
@@ -36,8 +35,7 @@ public class GlobalExceptionHandler {
                 .body(Map.of("error", "You do not have permission to perform this action."));
     }
 
-    // Bean-validation failures (@Valid body, @Min/@Max/@NotBlank params) must surface
-    // as 400, not be swallowed by the catch-all below (which would report 500).
+    // Bean-validation failures must return 400, not fall through to the catch-all's 500.
     @ExceptionHandler({MethodArgumentNotValidException.class,
             HandlerMethodValidationException.class, ConstraintViolationException.class})
     public ResponseEntity<Map<String, String>> handleValidation(Exception ex) {

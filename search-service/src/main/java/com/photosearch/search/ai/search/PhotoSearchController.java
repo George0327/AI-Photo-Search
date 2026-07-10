@@ -28,10 +28,7 @@ public class PhotoSearchController {
         return photoSearchService.searchPhotos(query, topK, albumIds, null);
     }
 
-    /**
-     * Semantic search with an optional "search within results" restriction. POST (not GET) because
-     * restrictToIds can carry up to 1000 photo IDs, which exceeds practical URL length limits.
-     */
+    /** Semantic search with an optional "search within results" restriction. POST because restrictToIds can carry up to 1000 IDs (too long for a URL). */
     @PostMapping
     public PhotoSearchService.PhotoSearchResponse searchPhotosPost(@Valid @RequestBody PhotoSearchRequest req) {
         return photoSearchService.searchPhotos(req.query(), req.topK(),

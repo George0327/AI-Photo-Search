@@ -70,9 +70,7 @@ public class MediaItemIndexingService {
             }
         }
 
-        // Chunks run in parallel on the indexing pool; each chunk is downloaded
-        // from Drive and sent to the AI service as a single batch request so the
-        // AI service can encode it in one forward pass and save its index once.
+        // Chunks run in parallel on the indexing pool; each is downloaded from Drive and sent as one batch (one AI forward pass, one index save).
         cancellationRegistry.begin(IndexingCancellationRegistry.Kind.CLIP, albumFolderId);
         try {
             List<CompletableFuture<Void>> futures = new ArrayList<>();
@@ -91,8 +89,7 @@ public class MediaItemIndexingService {
 
     private void indexChunk(String albumFolderId, List<MediaItem> chunk,
                             AtomicInteger indexedCount, List<DriveIndexFailure> failures) {
-        // Stop requested: bail before touching any status so queued items stay
-        // NOT_INDEXED (resumable). Chunks already past this point finish normally.
+        // Stop requested: bail before touching status so queued items stay NOT_INDEXED (resumable); in-flight chunks finish.
         if (cancellationRegistry.isCancelled(IndexingCancellationRegistry.Kind.CLIP, albumFolderId)) {
             return;
         }
@@ -102,8 +99,7 @@ public class MediaItemIndexingService {
         }
         mediaItemRepository.saveAll(chunk);
 
-        // Download the whole chunk in parallel — Drive latency, not the AI
-        // service, dominates otherwise.
+        // Download the whole chunk in parallel — Drive latency dominates, not the AI service.
         Map<MediaItem, CompletableFuture<byte[]>> downloads = new LinkedHashMap<>();
         for (MediaItem item : chunk) {
             downloads.put(item, CompletableFuture.supplyAsync(

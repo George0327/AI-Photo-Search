@@ -34,11 +34,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.photosearch.indexing.ai.indexing.IndexingConstants.NEEDS_INDEXING_STATUSES;
 
-/**
- * Face indexing mirrors CLIP indexing: per-item status lifecycle
- * (NOT_INDEXED → INDEXING → INDEXED/FAILED, plus STALE/DELETED from sync),
- * incremental "index new" and a full reindex that resets the AI face index.
- */
+/** Face indexing mirrors CLIP indexing: same per-item status lifecycle, incremental "index new", and a full reindex that resets the AI face index. */
 @Service
 public class FaceIndexingService {
 
@@ -142,8 +138,7 @@ public class FaceIndexingService {
 
         cancellationRegistry.begin(IndexingCancellationRegistry.Kind.FACE, albumFolderId);
         try {
-            // Same batching strategy as CLIP indexing: chunks in parallel on the
-            // indexing pool, one AI request and one index save per chunk.
+            // Same batching as CLIP: chunks in parallel on the indexing pool, one AI request and one index save per chunk.
             List<CompletableFuture<Void>> futures = new ArrayList<>();
             for (int start = 0; start < mediaItems.size(); start += batchSize) {
                 List<MediaItem> chunk = mediaItems.subList(start, Math.min(start + batchSize, mediaItems.size()));
@@ -167,8 +162,7 @@ public class FaceIndexingService {
 
     private void indexFaceChunk(String albumFolderId, List<MediaItem> chunk,
                                 AtomicInteger indexed, List<DriveIndexFailure> failures) {
-        // Stop requested: bail before touching any status so queued items stay
-        // NOT_INDEXED (resumable). Chunks already past this point finish normally.
+        // Stop requested: bail before touching status so queued items stay NOT_INDEXED (resumable); in-flight chunks finish.
         if (cancellationRegistry.isCancelled(IndexingCancellationRegistry.Kind.FACE, albumFolderId)) {
             return;
         }
@@ -178,8 +172,7 @@ public class FaceIndexingService {
         }
         mediaItemRepository.saveAll(chunk);
 
-        // Download the whole chunk in parallel — Drive latency, not the AI
-        // service, dominates otherwise.
+        // Download the whole chunk in parallel — Drive latency dominates, not the AI service.
         Map<MediaItem, CompletableFuture<byte[]>> downloads = new LinkedHashMap<>();
         for (MediaItem item : chunk) {
             downloads.put(item, CompletableFuture.supplyAsync(

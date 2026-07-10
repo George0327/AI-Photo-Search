@@ -91,8 +91,7 @@ public class RemoteAuthFilter extends OncePerRequestFilter {
                     cacheAuthentication(cookieHeader, auth);
                 }
             } catch (HttpClientErrorException e) {
-                // auth-service answered but rejected the session — proceed
-                // unauthenticated and let Spring Security return 401/403.
+                // auth-service rejected the session — proceed unauthenticated; Spring Security will return 401/403.
                 logger.debug("Auth service rejected session: {}", e.getStatusCode());
             } catch (Exception e) {
                 logger.warn("Auth service unreachable: {}", e.getMessage());
@@ -110,8 +109,7 @@ public class RemoteAuthFilter extends OncePerRequestFilter {
             tokenCache.values().removeIf(entry -> now >= (long) entry[1]);
         }
         if (tokenCache.size() >= MAX_CACHE_ENTRIES) {
-            // Still full after dropping expired entries — evict an arbitrary one
-            // so the cache stays bounded.
+            // Still full after dropping expired entries — evict an arbitrary one to stay bounded.
             Iterator<String> it = tokenCache.keySet().iterator();
             if (it.hasNext()) {
                 it.next();

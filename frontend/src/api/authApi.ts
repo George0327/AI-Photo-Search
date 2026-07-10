@@ -19,8 +19,7 @@ const ANONYMOUS_USER: AuthUser = {
 };
 
 export async function fetchCurrentUser(): Promise<AuthUser> {
-  // Intentionally not using fetchJson: an unauthenticated /me must resolve to
-  // the anonymous user instead of dispatching the session-expired event.
+  // Not fetchJson: an unauthenticated /me must resolve to the anonymous user, not dispatch the session-expired event.
   try {
     const response = await fetch(`${BASE_URL}/api/auth/me`, { credentials: "include" });
     if (!response.ok) return ANONYMOUS_USER;

@@ -26,8 +26,7 @@ public class SyncRun {
     @Column(name = "target_album_drive_id", length = 255) private String targetAlbumDriveId;
     @Column(name = "target_album_title", length = 500) private String targetAlbumTitle;
 
-    // Soft reference to identity_db.users (owned by auth-service); no FK across
-    // the database boundary. Null unless the caller's numeric id is known.
+    // Soft reference to identity_db.users (no FK across the DB boundary); null unless the caller's id is known.
     @Column(name = "started_by_user_id")
     private Long startedByUserId;
 

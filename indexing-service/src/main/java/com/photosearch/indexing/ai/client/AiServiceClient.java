@@ -64,10 +64,7 @@ public class AiServiceClient {
                 request, AiFaceBatchIndexResponse.class));
     }
 
-    /**
-     * Retries transient failures (connection problems, AI service 5xx) with
-     * exponential backoff. Client errors (4xx) are not retried.
-     */
+    /** Retries transient failures (connection problems, AI 5xx) with exponential backoff; 4xx client errors are not retried. */
     private <T> T withRetry(String operation, Supplier<T> call) {
         long backoffMs = INITIAL_BACKOFF_MS;
         for (int attempt = 1; ; attempt++) {

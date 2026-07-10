@@ -16,9 +16,7 @@ public class SyncRunService {
     private final SyncRunRepository syncRunRepository;
 
     public SyncRun start(SyncType type, String targetAlbumDriveId) {
-        // Caller identity lives in identity_db (auth-service); indexing-service no
-        // longer maps the users table, so started_by_user_id is left unset here.
-        // (Identity is resolved via the auth /api/auth/me endpoint, not the DB.)
+        // started_by_user_id is left unset: caller identity lives in identity_db and is resolved via auth /api/auth/me, not mapped here.
         SyncRun syncRun = SyncRun.builder()
                 .type(type).status(SyncStatus.RUNNING)
                 .targetAlbumDriveId(targetAlbumDriveId).startedAt(Instant.now())

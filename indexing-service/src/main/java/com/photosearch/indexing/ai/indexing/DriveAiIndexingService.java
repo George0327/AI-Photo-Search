@@ -112,16 +112,13 @@ public class DriveAiIndexingService {
         SyncRun syncRun = syncRunService.start(SyncType.AI_INDEX_ALL, null);
         try {
             List<Album> albums = new ArrayList<>(driveAlbumSyncService.syncAllDriveAlbums());
-            // Process newest events first. Albums are grouped by event year; sort by
-            // year descending (albums without a year last). Order within a year is irrelevant.
+            // Process newest events first: sort by album year descending (albums without a year last). Order within a year is irrelevant.
             albums.sort(Comparator.comparing(Album::getYear,
                     Comparator.nullsLast(Comparator.reverseOrder())));
             int totalIndexed = 0, totalMediaSeen = 0;
             List<DriveIndexFailure> allFailures = new ArrayList<>();
 
-            // Albums are processed sequentially on purpose: media batches within
-            // each album already saturate the GPU-bound AI service, so running
-            // albums in parallel would only add contention.
+            // Albums are processed sequentially: each album's batches already saturate the GPU-bound AI service, so parallel albums would only add contention.
             for (Album album : albums) {
                 List<MediaItem> mediaToIndex = mediaItemRepository
                         .findByAlbumAndDeletedInDriveFalseAndIndexingStatusIn(album, NEEDS_INDEXING_STATUSES);

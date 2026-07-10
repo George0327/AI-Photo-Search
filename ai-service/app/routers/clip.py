@@ -117,8 +117,7 @@ async def search(
             store = await loop.run_in_executor(ml_executor, get_cached_store, album_id)
         if not store.items:
             return []
-        # When restricting, rank the whole album then filter so subset members
-        # are not crowded out of a small top_k.
+        # When restricting, rank the whole album then filter, so subset members aren't crowded out of a small top_k.
         k = len(store.items) if restrict is not None else request.top_k
         album_results = await loop.run_in_executor(
             ml_executor, lambda s=store: s.search(query_vector, top_k=k)

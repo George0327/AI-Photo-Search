@@ -9,11 +9,7 @@ import lombok.Setter;
 
 import java.time.Instant;
 
-/**
- * A persisted search (text or face) with the ranked photo IDs it returned, kept per user so the
- * user can refine ("search within results") or recall past searches. The schema is created by
- * indexing-service Flyway (V3); search-service maps it read/write.
- */
+/** A persisted search (text or face) with its ranked result IDs, kept per user for refine and recall. Schema owned by indexing-service Flyway (V3); mapped read/write here. */
 @Entity
 @Table(name = "saved_searches")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder

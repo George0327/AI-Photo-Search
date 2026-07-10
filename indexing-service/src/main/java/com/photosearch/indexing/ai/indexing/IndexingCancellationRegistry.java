@@ -5,20 +5,7 @@ import org.springframework.stereotype.Component;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Tracks admin requests to stop an in-progress indexing run.
- *
- * <p>Indexing runs block their HTTP thread on {@code allOf().join()}, so they
- * cannot be interrupted directly. Cancellation is cooperative instead: the
- * run registers a key with {@link #begin}, each chunk checks {@link #isCancelled}
- * before doing work, and the run clears the key with {@link #end} in a finally
- * block. A separate "stop" request flips the flag via {@link #requestCancel}.
- *
- * <p>Keys are scoped per album and per index kind (CLIP vs faces) so stopping
- * one does not affect the other. In-flight chunks finish their current batch;
- * queued chunks bail before touching any item status, so already-indexed photos
- * are kept and the rest stay unindexed (the run is fully resumable).
- */
+/** Cooperative stop for indexing runs (they block on allOf().join() and can't be interrupted): a run registers a key per album+kind, each chunk checks it, a stop request flips the flag; in-flight chunks finish, queued ones bail, so the run is resumable. */
 @Component
 public class IndexingCancellationRegistry {
 

@@ -15,12 +15,10 @@ class ClipModel:
         self.device = "cuda" if config.use_cuda() else "cpu"
         self.model_name = model_name or config.CLIP_MODEL_NAME
         self.pretrained = pretrained or config.CLIP_PRETRAINED
-        # fp16 only on GPU — halves resident VRAM so CLIP can share a small card
-        # with the face model. CPU stays fp32 (fp16 is slow/unsupported on CPU).
+        # fp16 only on GPU — halves resident VRAM so CLIP shares a small card with the face model; CPU stays fp32.
         self.fp16 = self.device == "cuda" and config.CLIP_PRECISION == "fp16"
         self.dtype = torch.float16 if self.fp16 else torch.float32
-        # Upper bound on images per forward pass; keeps memory bounded regardless
-        # of how many files a single batch request carries.
+        # Upper bound on images per forward pass, so peak memory stays bounded per batch request.
         self.chunk_size = config.CLIP_ENCODE_CHUNK_SIZE
         self.model, _, self.preprocess = open_clip.create_model_and_transforms(
             model_name=self.model_name,

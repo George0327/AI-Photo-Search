@@ -1,10 +1,6 @@
 package com.photosearch.search.drive;
 
-/**
- * Builds the user-facing photo name "EventName_originalFilename", where EventName is the album
- * title with whitespace and non-filename-safe characters stripped (e.g. "Job Shop 2026" +
- * "DSC_1234.jpg" -> "JobShop2026_DSC_1234.jpg"). Display-only; mirrors the indexing-service helper.
- */
+/** Builds the display name "EventName_originalFilename" (album title stripped to filename-safe chars, e.g. "JobShop2026_DSC_1234.jpg"). Display-only; mirrors the indexing-service helper. */
 public final class PhotoNaming {
 
     private PhotoNaming() {}

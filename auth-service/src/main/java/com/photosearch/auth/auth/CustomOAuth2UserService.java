@@ -24,9 +24,7 @@ public class CustomOAuth2UserService extends OidcUserService {
     private final GoogleDomainAccessService googleDomainAccessService;
     private final UserRepository userRepository;
 
-    // Bootstrap owner: the first OWNER cannot be created in-app (role elevation
-    // requires an existing higher-ranked user), so a configured email is
-    // auto-promoted to OWNER on login. Blank disables the bootstrap.
+    // Bootstrap: a configured email is auto-promoted to OWNER on login (the first OWNER cannot be created in-app). Blank disables it.
     @Value("${app.security.owner-email:}")
     private String ownerEmail;
 

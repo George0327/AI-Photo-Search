@@ -24,16 +24,14 @@ export function useAdminIndexing() {
   const [indexingFacesAlbumId, setIndexingFacesAlbumId] = useState<string | null>(null);
   const [reindexingFacesAlbumId, setReindexingFacesAlbumId] = useState<string | null>(null);
 
-  // Album whose stop request is in flight (so the Stop button can show a spinner
-  // until the run actually winds down and polling clears the indexing flags).
+  // Album whose stop request is in flight, so the Stop button shows a spinner until polling clears the indexing flags.
   const [stoppingClipId, setStoppingClipId] = useState<string | null>(null);
   const [stoppingFacesId, setStoppingFacesId] = useState<string | null>(null);
 
   const [failures, setFailures] = useState<DriveIndexFailure[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // Tracks whether an HTTP indexing request is currently in flight.
-  // Used by the restore effect to avoid a circular dependency with anyAlbumBusy.
+  // Whether an HTTP indexing request is in flight; used by the restore effect to avoid a circular dependency with anyAlbumBusy.
   const operationInFlight = useRef(false);
 
   const anyAlbumBusy =
@@ -179,9 +177,7 @@ export function useAdminIndexing() {
     );
   }
 
-  // Stop requests are fire-and-forget: the backend cancels cooperatively, so the
-  // run keeps going until in-flight batches finish. We flag the album as stopping
-  // (spinner) and let polling clear it once the indexing flag drops.
+  // Stop is fire-and-forget (backend cancels cooperatively): flag the album as stopping and let polling clear it once the run winds down.
   async function handleStopIndex(album: AlbumIndexStatus) {
     setStoppingClipId(album.driveAlbumId);
     try {
@@ -228,9 +224,7 @@ export function useAdminIndexing() {
     loadAlbumStatuses();
   }, []);
 
-  // Restore in-progress indexing state when albums load (e.g. after navigation or page refresh).
-  // Uses operationInFlight ref (not anyAlbumBusy) to avoid a circular dependency where
-  // anyAlbumBusy is always true when indexingAlbumId !== null.
+  // Restore in-progress indexing state when albums load (e.g. after a refresh); uses operationInFlight (not anyAlbumBusy) to avoid a circular dependency.
   useEffect(() => {
     const activeClip  = albums.find(a => a.indexingImages);
     const activeFaces = albums.find(a => a.indexingFaces);
@@ -250,15 +244,7 @@ export function useAdminIndexing() {
     if (!activeFaces && stoppingFacesId !== null) setStoppingFacesId(null);
   }, [albums]);
 
-  // Poll while an operation we started is in flight OR a fetched status says an
-  // album is indexing (covers runs started in another tab/session). Without the
-  // local-operation condition, a click-started run would show no live progress:
-  // the first status fetch only happens after the request completes.
-  // The interval starts at ADMIN_POLL_INTERVAL_MS and backs off toward
-  // ADMIN_POLL_MAX_INTERVAL_MS while the indexing counts are unchanged, snapping
-  // back to the base the moment progress moves — responsive during active work,
-  // cheap on slow/stalled runs. Keyed on a stable boolean so it isn't torn down on
-  // every fetch. Paused while the tab is hidden; refreshes immediately on refocus.
+  // Poll while an operation is in flight or a fetched status says an album is indexing (covers other tabs); interval backs off from base to max while counts are unchanged, resets on progress, keyed on a stable boolean so it isn't torn down each fetch, paused while the tab is hidden.
   const shouldPoll = anyAlbumBusy || albums.some(a => a.indexingImages || a.indexingFaces);
 
   useEffect(() => {

@@ -28,9 +28,7 @@ face_model: FaceModel | None = None
 _embedding_dim: int | None = None
 
 # ── Per-album in-memory caches and async locks ───────────────────────────────
-# Store loaders may run on executor threads, but access to a given album's
-# entry is always serialized by its asyncio lock, and CPython dict assignment
-# is atomic, so plain dicts are safe here.
+# Plain dicts are safe: each album's entry is serialized by its asyncio lock and CPython dict assignment is atomic.
 
 _album_stores: dict[str, FaissStore] = {}
 _face_stores: dict[str, DetectionFaissStore] = {}
@@ -38,15 +36,10 @@ _face_stores: dict[str, DetectionFaissStore] = {}
 _album_locks: dict[str, asyncio.Lock] = {}
 _face_locks: dict[str, asyncio.Lock] = {}
 
-# Thread pool for CPU-bound work (image decode, FAISS I/O, CLIP) — runs outside
-# the per-album lock. PyTorch releases the GIL during C++ ops, so multiple
-# workers give real parallelism. Sizing comes from config (0 = os.cpu_count()).
+# CPU-bound pool (image decode, FAISS I/O, CLIP), outside the per-album lock. PyTorch releases the GIL during C++ ops, so workers run in parallel. 0 = os.cpu_count().
 ml_executor = ThreadPoolExecutor(max_workers=config.ML_EXECUTOR_WORKERS or (os.cpu_count() or 4))
 
-# Pool for InsightFace GPU inference. Defaults to ONE worker because the GPU
-# executes inferences serially anyway and the onnxruntime session is not
-# concurrency-safe. Image decode stays on ml_executor (parallel) and is pipelined
-# with this — see routers/faces.py. Tune via config.FACE_INFERENCE_CONCURRENCY.
+# InsightFace GPU pool, one worker by default: the GPU runs inferences serially and the onnxruntime session isn't concurrency-safe. Tune via config.FACE_INFERENCE_CONCURRENCY.
 face_executor = ThreadPoolExecutor(max_workers=max(1, config.FACE_INFERENCE_CONCURRENCY))
 
 

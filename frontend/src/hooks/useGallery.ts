@@ -23,8 +23,7 @@ function clampTopK(value: string): number {
 }
 
 export function useGallery() {
-  // Text searches are reflected in the URL (?q=…&topK=…&albums=…) so results
-  // can be bookmarked, shared, and survive a page refresh.
+  // Text searches are reflected in the URL (?q=…&topK=…&albums=…) so results can be bookmarked, shared, and survive a refresh.
   const [searchParams, setSearchParams] = useSearchParams();
   const initialQuery = searchParams.get("q") ?? "";
   const initialTopK = searchParams.get("topK") ?? "10";
@@ -173,9 +172,7 @@ export function useGallery() {
 
   function handleModeChange(mode: SearchMode) {
     setInputMode(mode);
-    // Normally switching modality starts fresh. But when "search within results"
-    // is on, keep the current results so the user can search the OTHER modality
-    // (text vs face) within them.
+    // Switching modality normally starts fresh, but with "search within results" on, keep the current results so the user can search the other modality within them.
     if (isSearchActive && !withinResults) clearSearch();
   }
 

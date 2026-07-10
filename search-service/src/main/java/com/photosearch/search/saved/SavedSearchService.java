@@ -21,11 +21,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-/**
- * Persists each search (per user) and serves the saved-search history. Used to power
- * "search within results" and recall of past searches. Pruned to the most recent
- * {@code app.search.saved-history-limit} entries per user.
- */
+/** Persists each search per user and serves the history (for "search within results" and recall), pruned to {@code app.search.saved-history-limit} entries per user. */
 @Service
 @RequiredArgsConstructor
 public class SavedSearchService {

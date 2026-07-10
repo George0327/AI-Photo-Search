@@ -20,8 +20,7 @@ export function searchPhotos(
   albumIds: string[] = [],
   restrictToIds?: string[],
 ): Promise<PhotoSearchResponse> {
-  // Plain search uses GET (bookmarkable); "search within results" uses POST so the
-  // (potentially large) restrictToIds list isn't crammed into the URL.
+  // Plain search uses GET (bookmarkable); "search within results" uses POST so the large restrictToIds list isn't crammed into the URL.
   if (restrictToIds && restrictToIds.length > 0) {
     return postJsonBody<PhotoSearchResponse>("/api/search", {
       query,

@@ -19,11 +19,7 @@ class FaceModel:
         cuda = config.use_cuda()
         providers = ["CUDAExecutionProvider", "CPUExecutionProvider"] if cuda else ["CPUExecutionProvider"]
 
-        # Bound InsightFace's GPU memory so it can coexist with CLIP on a small
-        # card. Its onnxruntime defaults (EXHAUSTIVE conv search + unbounded
-        # gpu_mem_limit) can blow past the free VRAM and CUDA-OOM-crash the whole
-        # process; HEURISTIC + a hard cap keep each detection bounded. The cap is
-        # on InsightFace's OWN allocator and must fit the VRAM left after CLIP.
+        # Cap InsightFace's GPU allocator (HEURISTIC conv search + hard gpu_mem_limit) to the VRAM left after CLIP; its onnxruntime defaults can otherwise CUDA-OOM the whole process.
         cuda_opts = {
             "gpu_mem_limit": str(config.FACE_GPU_MEM_LIMIT_MB * 1024 * 1024),
             "arena_extend_strategy": "kSameAsRequested",
@@ -32,9 +28,7 @@ class FaceModel:
         }
         provider_options = [cuda_opts, {}] if cuda else [{}]
 
-        # insightface ignores the INSIGHTFACE_HOME env var — its model root is a
-        # constructor argument. Without this, buffalo_l re-downloads to
-        # ~/.insightface on every container recreation instead of the cache volume.
+        # insightface takes its model root as a constructor arg (ignores INSIGHTFACE_HOME), so pass the cache dir or buffalo_l re-downloads on every container recreation.
         model_root = os.environ.get("INSIGHTFACE_HOME", "~/.insightface")
         self.app = FaceAnalysis(name=config.FACE_MODEL_NAME, root=model_root,
                                 providers=providers, provider_options=provider_options)

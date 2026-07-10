@@ -26,10 +26,7 @@ public interface MediaItemRepository extends JpaRepository<MediaItem, Long> {
     long countByAlbumAndDeletedInDriveFalseAndIndexingStatus(Album album, IndexingStatus status);
     long countByAlbumAndDeletedInDriveFalseAndFaceIndexingStatus(Album album, IndexingStatus status);
 
-    /**
-     * One grouped query covering every album, replacing the previous five
-     * count queries per album when building index status dashboards.
-     */
+    /** One grouped query over all albums, replacing the previous per-album count queries for the status dashboards. */
     @Query("""
             select m.album.id as albumId, m.deletedInDrive as deleted,
                    m.indexingStatus as status, m.faceIndexingStatus as faceStatus,

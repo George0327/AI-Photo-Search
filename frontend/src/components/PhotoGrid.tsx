@@ -39,8 +39,7 @@ function scoreColor(score: number): string {
   return "gray";
 }
 
-// Memoized: the grid renders many lazy-loaded images, so skipping re-renders
-// when the parent re-renders with unchanged props avoids visible churn.
+// Memoized: the grid has many lazy-loaded images, so skipping re-renders on unchanged props avoids visible churn.
 export const PhotoGrid = memo(function PhotoGrid({
   images,
   loading,

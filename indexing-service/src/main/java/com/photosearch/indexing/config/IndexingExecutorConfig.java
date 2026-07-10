@@ -18,10 +18,7 @@ public class IndexingExecutorConfig {
 
     @Bean(name = "indexingExecutor")
     public Executor indexingExecutor() {
-        // Each thread holds a full batch of image bytes in memory (batch-size
-        // photos plus the buffered multipart upload), so thread count is the
-        // memory budget knob. The GPU-bound AI service is the throughput limit
-        // anyway — 4 in-flight batches keep it saturated. Override via INDEXING_POOL_SIZE.
+        // Thread count is the memory budget (each thread holds a batch); a few in-flight batches saturate the GPU-bound AI service. Override via INDEXING_POOL_SIZE.
         int poolSize = configuredPoolSize > 0
                 ? configuredPoolSize
                 : Math.min(4, Runtime.getRuntime().availableProcessors());
@@ -30,9 +27,7 @@ public class IndexingExecutorConfig {
 
     @Bean(name = "downloadExecutor")
     public Executor downloadExecutor() {
-        // Drive downloads are pure I/O latency, so a chunk's photos are fetched
-        // in parallel here. This adds no memory pressure: only the chunks already
-        // held by the indexing pool are ever being downloaded.
+        // Drive downloads are pure I/O latency, so a chunk's photos are fetched in parallel; no extra memory beyond the in-flight chunks.
         int poolSize = configuredDownloadPoolSize > 0
                 ? configuredDownloadPoolSize
                 : Math.min(16, Runtime.getRuntime().availableProcessors() * 2);
