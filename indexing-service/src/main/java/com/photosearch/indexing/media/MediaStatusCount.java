@@ -1,6 +1,6 @@
 package com.photosearch.indexing.media;
 
-/** Projection for grouped media counts per album / deletion flag / CLIP and face indexing status. */
+// projection for grouped media counts per album and status
 public interface MediaStatusCount {
     Long getAlbumId();
     boolean getDeleted();

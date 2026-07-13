@@ -24,13 +24,17 @@ public class PhotoSearchService {
     private final MediaItemRepository mediaItemRepository;
     private final SavedSearchService savedSearchService;
 
+    // the AI service ranks the photos, then their details are hydrated from the database
     public PhotoSearchResponse searchPhotos(String query, int topK, List<String> albumIds, List<String> restrictToIds) {
         List<String> selectedAlbumIds = albumIds != null ? albumIds : List.of();
+
+        // over-fetch, since hydration drops the photos that are gone from the database
         int aiTopK = Math.min(topK * 3, 1000);
 
         AiSearchResponse aiResponse = aiServiceClient.search(query, aiTopK, selectedAlbumIds, restrictToIds);
 
         if (aiResponse == null) throw new IllegalStateException("No response from AI service");
+
         if (!aiResponse.success() || aiResponse.results() == null || aiResponse.results().isEmpty())
             return new PhotoSearchResponse(query, topK, selectedAlbumIds, List.of());
 
@@ -48,15 +52,21 @@ public class PhotoSearchService {
 
         for (AiSearchResult result : aiResponse.results()) {
             if (results.size() >= topK) break;
+
             MediaItem mediaItem = mediaByDriveFileId.get(result.itemId());
+
             if (mediaItem == null) continue;
+
             String albumDriveFolderId = mediaItem.getAlbum().getDriveFolderId();
+
             if (!selectedAlbumIdSet.isEmpty() && !selectedAlbumIdSet.contains(albumDriveFolderId)) continue;
+
             results.add(new PhotoSearchResult(result.score(), albumDriveFolderId, driveFileInfoFrom(mediaItem)));
         }
 
         savedSearchService.save("TEXT", query, selectedAlbumIds,
                 results.stream().map(r -> r.file().getId()).toList());
+
         return new PhotoSearchResponse(query, topK, selectedAlbumIds, results);
     }
 

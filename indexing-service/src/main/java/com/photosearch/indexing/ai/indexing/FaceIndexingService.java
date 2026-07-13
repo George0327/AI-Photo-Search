@@ -34,7 +34,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.photosearch.indexing.ai.indexing.IndexingConstants.NEEDS_INDEXING_STATUSES;
 
-/** Face indexing mirrors CLIP indexing: same per-item status lifecycle, incremental "index new", and a full reindex that resets the AI face index. */
+// face indexing. mirrors CLIP indexing: same status lifecycle, incremental run and full reindex
 @Service
 public class FaceIndexingService {
 
@@ -76,20 +76,22 @@ public class FaceIndexingService {
         this.batchSize = Math.max(1, batchSize);
     }
 
-    /** Requests that an in-progress face-indexing run for this album stop as soon as possible. */
     public void requestStop(String driveAlbumId) {
         cancellationRegistry.requestCancel(IndexingCancellationRegistry.Kind.FACE, driveAlbumId);
     }
 
     public DriveIndexResult indexNewFacesInAlbum(String driveAlbumId) {
         SyncRun syncRun = syncRunService.start(SyncType.FACE_INDEX_ALBUM, driveAlbumId);
+
         try {
             Album album = driveAlbumSyncService.syncAlbumMetadata(driveAlbumId);
+
             syncRunService.setTargetAlbum(syncRun, album.getDriveFolderId(), album.getTitle());
             ensureNotAlreadyIndexingFaces(album);
 
             List<MediaItem> toIndex = mediaItemRepository
                     .findByAlbumAndDeletedInDriveFalseAndFaceIndexingStatusIn(album, NEEDS_INDEXING_STATUSES);
+
             return runFaceIndexing(syncRun, album, toIndex);
         } catch (Exception e) {
             syncRunService.finishFailed(syncRun, e);
@@ -99,12 +101,15 @@ public class FaceIndexingService {
 
     public DriveIndexResult reindexFacesForAlbum(String driveAlbumId) {
         SyncRun syncRun = syncRunService.start(SyncType.FACE_REBUILD, driveAlbumId);
+
         try {
             Album album = driveAlbumSyncService.syncAlbumMetadata(driveAlbumId);
+
             syncRunService.setTargetAlbum(syncRun, album.getDriveFolderId(), album.getTitle());
             ensureNotAlreadyIndexingFaces(album);
 
             AiIndexResponse resetResponse = aiServiceClient.resetAlbumFaceIndex(driveAlbumId);
+
             if (resetResponse == null || !resetResponse.success()) {
                 throw new IllegalStateException(resetResponse != null
                         ? resetResponse.message() : "No response from AI service when resetting face index.");
@@ -112,7 +117,9 @@ public class FaceIndexingService {
 
             List<MediaItem> activeMedia = mediaItemRepository
                     .findByAlbumAndDeletedInDriveFalseOrderByCreatedInDriveAtDesc(album);
+
             resetFaceIndexingState(activeMedia);
+
             return runFaceIndexing(syncRun, album, activeMedia);
         } catch (Exception e) {
             syncRunService.finishFailed(syncRun, e);
@@ -128,6 +135,7 @@ public class FaceIndexingService {
         }
     }
 
+    // splits the work into chunks and runs them in parallel on the indexing pool
     private DriveIndexResult runFaceIndexing(SyncRun syncRun, Album album, List<MediaItem> mediaItems) {
         album.setIndexingFaces(true);
         albumRepository.save(album);
@@ -137,16 +145,19 @@ public class FaceIndexingService {
         CopyOnWriteArrayList<DriveIndexFailure> failures = new CopyOnWriteArrayList<>();
 
         cancellationRegistry.begin(IndexingCancellationRegistry.Kind.FACE, albumFolderId);
+
         try {
-            // Same batching as CLIP: chunks in parallel on the indexing pool, one AI request and one index save per chunk.
             List<CompletableFuture<Void>> futures = new ArrayList<>();
+
             for (int start = 0; start < mediaItems.size(); start += batchSize) {
                 List<MediaItem> chunk = mediaItems.subList(start, Math.min(start + batchSize, mediaItems.size()));
+
                 futures.add(CompletableFuture.runAsync(
                         () -> indexFaceChunk(albumFolderId, chunk, indexed, failures), indexingExecutor));
             }
 
             CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
             if (indexed.get() > 0) album.setFaceIndexedAt(Instant.now());
         } finally {
             cancellationRegistry.end(IndexingCancellationRegistry.Kind.FACE, albumFolderId);
@@ -155,25 +166,30 @@ public class FaceIndexingService {
         }
 
         int mediaSeen = (int) mediaItemRepository.countByAlbumAndDeletedInDriveFalse(album);
+
         syncRunService.finishFromResult(syncRun, 1, mediaSeen, indexed.get(),
                 failures.size(), "Some photos failed face indexing.");
+
         return albumIndexStatusService.buildDriveIndexResult(1, List.of(album), indexed.get(), failures);
     }
 
+    // downloads a chunk from Drive in parallel, then sends it to the AI service as one batch
     private void indexFaceChunk(String albumFolderId, List<MediaItem> chunk,
                                 AtomicInteger indexed, List<DriveIndexFailure> failures) {
-        // Stop requested: bail before touching status so queued items stay NOT_INDEXED (resumable); in-flight chunks finish.
+        // bail before touching status, so queued items stay NOT_INDEXED and the run can resume
         if (cancellationRegistry.isCancelled(IndexingCancellationRegistry.Kind.FACE, albumFolderId)) {
             return;
         }
+
         for (MediaItem item : chunk) {
             item.setFaceIndexingStatus(IndexingStatus.INDEXING);
             item.setFaceIndexingError(null);
         }
+
         mediaItemRepository.saveAll(chunk);
 
-        // Download the whole chunk in parallel — Drive latency dominates, not the AI service.
         Map<MediaItem, CompletableFuture<byte[]>> downloads = new LinkedHashMap<>();
+
         for (MediaItem item : chunk) {
             downloads.put(item, CompletableFuture.supplyAsync(
                     () -> googleDriveService.downloadFileBytes(item.getDriveFileId()), downloadExecutor));
@@ -181,32 +197,41 @@ public class FaceIndexingService {
 
         List<AiImagePayload> payloads = new ArrayList<>();
         List<MediaItem> uploaded = new ArrayList<>();
+
         for (Map.Entry<MediaItem, CompletableFuture<byte[]>> download : downloads.entrySet()) {
             MediaItem item = download.getKey();
+
             try {
                 byte[] bytes = download.getValue().join();
+
                 payloads.add(new AiImagePayload(item.getDriveFileId(), item.getFilename(),
                         item.getMimeType(), bytes));
                 uploaded.add(item);
             } catch (Exception e) {
                 Throwable cause = e.getCause() != null ? e.getCause() : e;
+
                 log.warn("Download failed [{}]: {}", item.getFilename(), cause.getMessage());
                 markFaceFailed(item, "Drive download failed: " + cause.getMessage(), failures);
             }
         }
+
         if (uploaded.isEmpty()) return;
 
         AiFaceBatchIndexResponse response;
+
         try {
             log.info("Face-indexing batch of {} image(s)", uploaded.size());
             response = aiServiceClient.indexAlbumFacesBatch(albumFolderId, payloads);
         } catch (Exception e) {
             log.warn("AI face batch indexing failed: {}", e.getMessage());
+
             for (MediaItem item : uploaded) markFaceFailed(item, e.getMessage(), failures);
+
             return;
         }
 
         Map<String, AiFaceBatchIndexItemResult> resultsByImageId = new HashMap<>();
+
         if (response != null && response.results() != null) {
             for (AiFaceBatchIndexItemResult result : response.results()) {
                 resultsByImageId.put(result.imageId(), result);
@@ -215,6 +240,7 @@ public class FaceIndexingService {
 
         for (MediaItem item : uploaded) {
             AiFaceBatchIndexItemResult result = resultsByImageId.get(item.getDriveFileId());
+
             if (result != null && result.success()) {
                 item.setFaceIndexingStatus(IndexingStatus.INDEXED);
                 item.setFaceIndexedAt(Instant.now());
@@ -222,11 +248,13 @@ public class FaceIndexingService {
                 indexed.incrementAndGet();
             } else {
                 String error = result != null ? result.message() : "No result from AI service for this image.";
+
                 item.setFaceIndexingStatus(IndexingStatus.FAILED);
                 item.setFaceIndexingError(error);
                 failures.add(new DriveIndexFailure(item.getDriveFileId(), item.getFilename(), error));
             }
         }
+
         mediaItemRepository.saveAll(uploaded);
     }
 
@@ -243,6 +271,7 @@ public class FaceIndexingService {
             item.setFaceIndexedAt(null);
             item.setFaceIndexingError(null);
         }
+
         mediaItemRepository.saveAll(mediaItems);
     }
 }

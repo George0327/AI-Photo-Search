@@ -32,10 +32,12 @@ async def reset_album_face_index(
     _: None = Depends(verify_internal_api_key),
 ):
     loop = asyncio.get_running_loop()
+
     async with _get_lock(_face_locks, album_id):
         store = DetectionFaissStore(dimension=FACE_INDEX_DIM)
         state._face_stores[album_id] = store
         await loop.run_in_executor(ml_executor, save_face_store, album_id, store)
+
     return {"success": True, "message": f"Album face index reset successfully: {album_id}"}
 
 
@@ -46,7 +48,7 @@ async def index_album_faces_batch(
     image_ids: List[str] = Form(...),
     _: None = Depends(verify_internal_api_key),
 ):
-    """Face-index a batch of images with one index save at the end."""
+    """face-index a batch of images with one index save at the end"""
     if len(files) != len(image_ids):
         raise HTTPException(status_code=422, detail="files and image_ids must have the same length")
 
@@ -56,7 +58,9 @@ async def index_album_faces_batch(
 
     async with _get_lock(_face_locks, album_id):
         store = await loop.run_in_executor(ml_executor, get_cached_face_store, album_id)
+
     pending = []
+
     for image_id, image_bytes in zip(image_ids, contents):
         if store.is_image_indexed(image_id):
             results[image_id] = {"image_id": image_id, "success": True, "face_count": 0,
@@ -64,6 +68,7 @@ async def index_album_faces_batch(
         else:
             pending.append((image_id, image_bytes))
 
+    # decode in parallel, detect serially (the ONNX session is not thread-safe)
     async def process(image_bytes: bytes):
         try:
             image = await loop.run_in_executor(ml_executor, state.face_model.decode_image, image_bytes)
@@ -77,28 +82,32 @@ async def index_album_faces_batch(
         async with _get_lock(_face_locks, album_id):
             store = await loop.run_in_executor(ml_executor, get_cached_face_store, album_id)
             added = False
+
             for (image_id, _), faces in zip(pending, detections):
                 if isinstance(faces, Exception):
                     results[image_id] = {"image_id": image_id, "success": False, "face_count": 0,
                                          "message": f"Face detection failed: {faces}"}
                     continue
+
                 if not store.is_image_indexed(image_id):
                     for face in faces:
                         store.add(face["embedding"], image_id, face["bbox"], face["confidence"])
+
                     store.mark_processed(image_id)
                     added = True
+
                 results[image_id] = {"image_id": image_id, "success": True, "face_count": len(faces),
                                      "message": f"Indexed {len(faces)} face(s)"}
+
             if added:
                 await loop.run_in_executor(ml_executor, save_face_store, album_id, store)
 
     ordered = [results[image_id] for image_id in image_ids]
     failed = sum(1 for r in ordered if not r["success"])
+
     return {"success": failed == 0,
             "message": f"Face-indexed batch for album {album_id}: {len(ordered) - failed} ok, {failed} failed",
             "results": ordered}
-
-
 
 
 @router.post("/search/faces", response_model=FaceSearchResponse)
@@ -111,14 +120,16 @@ async def search_faces(
     _: None = Depends(verify_internal_api_key),
 ):
     loop = asyncio.get_running_loop()
-    # Optional "search within results": restrict matches to a prior result set.
+
+    # "search within results": restrict matches to a prior result set
     restrict = set(restrict_ids) if restrict_ids else None
 
-    # Extract face embeddings from all reference images (off the event loop)
     embeddings = []
+
     for f in files:
         image_bytes = await f.read()
         embedding = await loop.run_in_executor(face_executor, state.face_model.embedding_from_bytes, image_bytes)
+
         if embedding is not None:
             embeddings.append(embedding)
 
@@ -143,27 +154,33 @@ async def search_faces(
         return {"success": False, "message": "No face indexes found. Run face indexing first.", "results": []}
 
     async def search_album(album_id: str) -> list[dict]:
-        # Get store reference under lock (load happens off the event loop), search outside lock
         async with _get_lock(_face_locks, album_id):
             store = await loop.run_in_executor(ml_executor, get_cached_face_store, album_id)
+
         if not store.items:
             return []
-        # When restricting, rank the whole album then filter, so subset members aren't crowded out of a small top_k.
+
+        # when restricting, rank the whole album then filter
         k = len(store.items) if restrict is not None else top_k
+
         album_results = await loop.run_in_executor(
             ml_executor, lambda s=store: s.search(query_vector, top_k=k)
         )
+
         return [{**r, "album_id": album_id} for r in album_results
                 if restrict is None or r["image_id"] in restrict]
 
     per_album_results = await asyncio.gather(*(search_album(a) for a in target_album_ids))
 
     merged: dict[str, dict] = {}
+
     for album_results in per_album_results:
         for r in album_results:
             if r["score"] < threshold:
                 continue
+
             item_id = r["image_id"]
+
             if item_id not in merged or r["score"] > merged[item_id]["score"]:
                 merged[item_id] = {
                     "item_id": item_id,
@@ -173,4 +190,5 @@ async def search_faces(
                 }
 
     results = sorted(merged.values(), key=lambda x: x["score"], reverse=True)[:top_k]
+
     return {"success": True, "message": f"Found {len(results)} matching photo(s)", "results": results}

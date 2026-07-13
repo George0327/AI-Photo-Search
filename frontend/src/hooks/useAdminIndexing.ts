@@ -24,14 +24,14 @@ export function useAdminIndexing() {
   const [indexingFacesAlbumId, setIndexingFacesAlbumId] = useState<string | null>(null);
   const [reindexingFacesAlbumId, setReindexingFacesAlbumId] = useState<string | null>(null);
 
-  // Album whose stop request is in flight, so the Stop button shows a spinner until polling clears the indexing flags.
+  // the album whose stop request is in flight, so the button can show a spinner
   const [stoppingClipId, setStoppingClipId] = useState<string | null>(null);
   const [stoppingFacesId, setStoppingFacesId] = useState<string | null>(null);
 
   const [failures, setFailures] = useState<DriveIndexFailure[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // Whether an HTTP indexing request is in flight; used by the restore effect to avoid a circular dependency with anyAlbumBusy.
+  // a ref, not state: the restore effect below would otherwise depend on itself
   const operationInFlight = useRef(false);
 
   const anyAlbumBusy =
@@ -45,6 +45,7 @@ export function useAdminIndexing() {
     try {
       setError(null);
       setAlbumsLoading(true);
+
       const data = await fetchAlbumIndexStatuses();
       setAlbums(data);
     } catch (err) {
@@ -58,6 +59,7 @@ export function useAdminIndexing() {
     try {
       setError(null);
       setAlbumsLoading(true);
+
       const data = await syncAndFetchAlbumStatuses();
       setAlbums(data);
     } catch (err) {
@@ -77,6 +79,7 @@ export function useAdminIndexing() {
   ) {
     setError(null);
     setFailures([]);
+
     if (startMessage) {
       notifications.show({
         title: "Started",
@@ -85,21 +88,28 @@ export function useAdminIndexing() {
         autoClose: 3000,
       });
     }
+
     operationInFlight.current = true;
     startLoading();
+
     try {
       const data = await apiCall();
       const n = data.newlyIndexedCount;
+
       notifications.show({
         title: data.failedCount === 0 ? successTitle : "Completed with errors",
         message: `${n} ${countLabel}${n !== 1 ? "s" : ""} indexed.${data.failedCount > 0 ? ` ${data.failedCount} failed.` : ""}`,
         color: data.failedCount === 0 ? "green" : "yellow",
         autoClose: 5000,
       });
+
       if (data.failures.length > 0) setFailures(data.failures);
+
       await loadAlbumStatuses();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
+
+      // a long run can outlive the request while still finishing on the server
       const isTimeout =
         msg.includes("504") ||
         msg.includes("502") ||
@@ -177,11 +187,13 @@ export function useAdminIndexing() {
     );
   }
 
-  // Stop is fire-and-forget (backend cancels cooperatively): flag the album as stopping and let polling clear it once the run winds down.
+  // fire-and-forget: the backend stops between chunks, and polling clears the flag afterwards
   async function handleStopIndex(album: AlbumIndexStatus) {
     setStoppingClipId(album.driveAlbumId);
+
     try {
       await stopIndexAlbum(album.driveAlbumId);
+
       notifications.show({
         title: "Stopping…",
         message: `Stopping indexing of "${album.title}". Photos already indexed are kept.`,
@@ -190,6 +202,7 @@ export function useAdminIndexing() {
       });
     } catch (err) {
       setStoppingClipId(null);
+
       notifications.show({
         title: "Could not stop",
         message: err instanceof Error ? err.message : "Failed to request stop.",
@@ -201,8 +214,10 @@ export function useAdminIndexing() {
 
   async function handleStopFaces(album: AlbumIndexStatus) {
     setStoppingFacesId(album.driveAlbumId);
+
     try {
       await stopIndexFaces(album.driveAlbumId);
+
       notifications.show({
         title: "Stopping…",
         message: `Stopping face indexing of "${album.title}". Photos already indexed are kept.`,
@@ -211,6 +226,7 @@ export function useAdminIndexing() {
       });
     } catch (err) {
       setStoppingFacesId(null);
+
       notifications.show({
         title: "Could not stop",
         message: err instanceof Error ? err.message : "Failed to request stop.",
@@ -224,7 +240,7 @@ export function useAdminIndexing() {
     loadAlbumStatuses();
   }, []);
 
-  // Restore in-progress indexing state when albums load (e.g. after a refresh); uses operationInFlight (not anyAlbumBusy) to avoid a circular dependency.
+  // picks a run back up when the albums load, so a refresh does not lose it
   useEffect(() => {
     const activeClip  = albums.find(a => a.indexingImages);
     const activeFaces = albums.find(a => a.indexingFaces);
@@ -239,12 +255,13 @@ export function useAdminIndexing() {
     else if (!activeFaces && indexingFacesAlbumId !== null && !operationInFlight.current)
       setIndexingFacesAlbumId(null);
 
-    // Once the run has actually wound down, drop the "stopping" spinner.
+    // the run has wound down, so drop the spinner
     if (!activeClip && stoppingClipId !== null) setStoppingClipId(null);
     if (!activeFaces && stoppingFacesId !== null) setStoppingFacesId(null);
   }, [albums]);
 
-  // Poll while an operation is in flight or a fetched status says an album is indexing (covers other tabs); interval backs off from base to max while counts are unchanged, resets on progress, keyed on a stable boolean so it isn't torn down each fetch, paused while the tab is hidden.
+  // poll while anything is indexing, here or in another tab.
+  // the interval backs off while the counts stand still and resets as soon as they move
   const shouldPoll = anyAlbumBusy || albums.some(a => a.indexingImages || a.indexingFaces);
 
   useEffect(() => {
@@ -263,19 +280,24 @@ export function useAdminIndexing() {
       try {
         const data = await fetchAlbumIndexStatuses();
         setAlbums(data);
+
         const signature = statusSignature(data);
+
         delay = signature !== prevSignature
           ? ADMIN_POLL_INTERVAL_MS
           : Math.min(delay * 1.5, ADMIN_POLL_MAX_INTERVAL_MS);
+
         prevSignature = signature;
       } catch (err) {
         console.warn("Polling album statuses failed:", err);
       }
+
       timer = setTimeout(() => { if (!document.hidden) tick(); }, delay);
     };
 
     timer = setTimeout(() => { if (!document.hidden) tick(); }, delay);
 
+    // a hidden tab does not poll, so catch up as soon as it comes back
     const onVisibilityChange = () => {
       if (!document.hidden) {
         delay = ADMIN_POLL_INTERVAL_MS;
@@ -283,6 +305,7 @@ export function useAdminIndexing() {
         tick();
       }
     };
+
     document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {

@@ -3,13 +3,13 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
-# ── CLIP semantic search ──────────────────────────────────────────────────────
+# CLIP semantic search
 
 class SearchRequest(BaseModel):
     query: str = Field(..., min_length=1, description="Natural language search query")
     top_k: int = Field(default=10, ge=1, le=1000)
     album_ids: List[str] = Field(default_factory=list)
-    # When set, restrict results to these photo IDs (search-within-results / refine).
+    # when set, only these photo IDs are searched
     restrict_ids: Optional[List[str]] = None
 
 
@@ -27,7 +27,7 @@ class SearchResponse(BaseModel):
     results: List[SearchResultItem]
 
 
-# ── Batch indexing ────────────────────────────────────────────────────────────
+# Batch indexing
 
 class BatchIndexItemResult(BaseModel):
     image_id: str
@@ -54,7 +54,7 @@ class FaceBatchIndexResponse(BaseModel):
     results: List[FaceBatchIndexItemResult]
 
 
-# ── Face indexing / search ────────────────────────────────────────────────────
+# Face indexing / search
 
 class FaceSearchResultItem(BaseModel):
     item_id: str
@@ -69,7 +69,7 @@ class FaceSearchResponse(BaseModel):
     results: List[FaceSearchResultItem]
 
 
-# ── Health ────────────────────────────────────────────────────────────────────
+# Health
 
 class HealthResponse(BaseModel):
     status: str

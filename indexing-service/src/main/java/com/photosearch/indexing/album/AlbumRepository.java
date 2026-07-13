@@ -13,7 +13,7 @@ public interface AlbumRepository extends JpaRepository<Album, Long> {
     List<Album> findByDeletedInDriveFalseOrderByTitleAsc();
     boolean existsByDriveFolderId(String driveFolderId);
 
-    /** Clears in-progress flags left behind by a crash/restart. */
+    // clears in-progress flags left behind by a crash/restart
     @Modifying
     @Query("update Album a set a.indexingFaces = false where a.indexingFaces = true")
     int clearStuckFaceIndexingFlags();

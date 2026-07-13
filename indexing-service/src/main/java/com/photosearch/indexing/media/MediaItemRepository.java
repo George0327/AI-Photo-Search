@@ -26,7 +26,7 @@ public interface MediaItemRepository extends JpaRepository<MediaItem, Long> {
     long countByAlbumAndDeletedInDriveFalseAndIndexingStatus(Album album, IndexingStatus status);
     long countByAlbumAndDeletedInDriveFalseAndFaceIndexingStatus(Album album, IndexingStatus status);
 
-    /** One grouped query over all albums, replacing the previous per-album count queries for the status dashboards. */
+    // one grouped query over all albums, for the status dashboards
     @Query("""
             select m.album.id as albumId, m.deletedInDrive as deleted,
                    m.indexingStatus as status, m.faceIndexingStatus as faceStatus,
@@ -39,7 +39,7 @@ public interface MediaItemRepository extends JpaRepository<MediaItem, Long> {
 
     boolean existsByDriveFileId(String driveFileId);
 
-    /** Recovers items left mid-flight by a crash/restart so they can be retried. */
+    // recovers items left mid-flight by a crash/restart
     @Modifying
     @Query("""
             update MediaItem m

@@ -66,7 +66,7 @@ export default function DriveGalleryPage() {
     loadImages,
   } = useGallery();
 
-  // Stable wrapper so the memoized AlbumRow components don't re-render on every gallery state change.
+  // stable, so the memoized rows survive an unrelated gallery state change
   const { onSelectAlbum } = albumSidebarProps;
   const handleSelectAlbum = useCallback(
     (album: DriveFileInfo) => {

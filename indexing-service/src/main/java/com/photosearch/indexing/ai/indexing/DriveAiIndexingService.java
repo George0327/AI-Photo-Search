@@ -33,25 +33,28 @@ public class DriveAiIndexingService {
     private final AlbumRepository albumRepository;
     private final IndexingCancellationRegistry cancellationRegistry;
 
-    /** Requests that an in-progress CLIP indexing run for this album stop as soon as possible. */
     public void requestStop(String driveAlbumId) {
         cancellationRegistry.requestCancel(IndexingCancellationRegistry.Kind.CLIP, driveAlbumId);
     }
 
     public List<AlbumIndexStatus> getAlbumIndexStatuses() {
         List<Album> albums = albumRepository.findByEnabledTrueAndDeletedInDriveFalseOrderByTitleAsc();
+
         return albumIndexStatusService.buildAlbumIndexStatuses(albums);
     }
 
     public List<AlbumIndexStatus> syncAndGetAlbumIndexStatuses() {
         List<Album> albums = driveAlbumSyncService.syncAllDriveAlbums();
+
         return albumIndexStatusService.buildAlbumIndexStatuses(albums);
     }
 
     public DriveIndexResult indexNewPhotosInAlbum(String driveAlbumId) {
         SyncRun syncRun = syncRunService.start(SyncType.AI_INDEX_ALBUM, driveAlbumId);
+
         try {
             Album album = driveAlbumSyncService.syncAlbumMetadata(driveAlbumId);
+
             syncRunService.setTargetAlbum(syncRun, album.getDriveFolderId(), album.getTitle());
 
             if (mediaItemRepository.countByAlbumAndDeletedInDriveFalseAndIndexingStatus(album, IndexingStatus.INDEXING) > 0) {
@@ -60,10 +63,13 @@ public class DriveAiIndexingService {
 
             List<MediaItem> mediaToIndex = mediaItemRepository
                     .findByAlbumAndDeletedInDriveFalseAndIndexingStatusIn(album, NEEDS_INDEXING_STATUSES);
+
             MediaIndexingResult indexingResult = mediaItemIndexingService.indexMediaItems(album, mediaToIndex);
 
             if (indexingResult.indexedCount() > 0) album.setLastIndexedAt(Instant.now());
+
             int mediaSeen = (int) mediaItemRepository.countByAlbumAndDeletedInDriveFalse(album);
+
             syncRunService.finishFromResult(syncRun, 1, mediaSeen, indexingResult.indexedCount(),
                     indexingResult.failures().size(), "Some photos failed to index.");
 
@@ -77,8 +83,10 @@ public class DriveAiIndexingService {
 
     public DriveIndexResult reindexWholeAlbum(String driveAlbumId) {
         SyncRun syncRun = syncRunService.start(SyncType.FAISS_REBUILD, driveAlbumId);
+
         try {
             Album album = driveAlbumSyncService.syncAlbumMetadata(driveAlbumId);
+
             syncRunService.setTargetAlbum(syncRun, album.getDriveFolderId(), album.getTitle());
 
             if (mediaItemRepository.countByAlbumAndDeletedInDriveFalseAndIndexingStatus(album, IndexingStatus.INDEXING) > 0) {
@@ -86,6 +94,7 @@ public class DriveAiIndexingService {
             }
 
             AiIndexResponse resetResponse = aiServiceClient.resetAlbumIndex(driveAlbumId);
+
             if (resetResponse == null || !resetResponse.success()) {
                 throw new IllegalStateException(resetResponse != null
                         ? resetResponse.message() : "No response from AI service when resetting album index.");
@@ -93,13 +102,16 @@ public class DriveAiIndexingService {
 
             List<MediaItem> activeMedia = mediaItemRepository
                     .findByAlbumAndDeletedInDriveFalseOrderByCreatedInDriveAtDesc(album);
+
             resetMediaIndexingState(activeMedia);
 
             MediaIndexingResult indexingResult = mediaItemIndexingService.indexMediaItems(album, activeMedia);
+
             if (indexingResult.indexedCount() > 0) album.setLastIndexedAt(Instant.now());
 
             syncRunService.finishFromResult(syncRun, 1, activeMedia.size(), indexingResult.indexedCount(),
                     indexingResult.failures().size(), "Some photos failed to reindex.");
+
             return albumIndexStatusService.buildDriveIndexResult(1, List.of(album),
                     indexingResult.indexedCount(), indexingResult.failures());
         } catch (Exception e) {
@@ -108,29 +120,37 @@ public class DriveAiIndexingService {
         }
     }
 
+    // albums run one after another: a single album's batches already saturate the AI service
     public DriveIndexResult indexNewPhotosInAllAlbums() {
         SyncRun syncRun = syncRunService.start(SyncType.AI_INDEX_ALL, null);
+
         try {
             List<Album> albums = new ArrayList<>(driveAlbumSyncService.syncAllDriveAlbums());
-            // Process newest events first: sort by album year descending (albums without a year last). Order within a year is irrelevant.
+
+            // newest events first, albums without a year last
             albums.sort(Comparator.comparing(Album::getYear,
                     Comparator.nullsLast(Comparator.reverseOrder())));
+
             int totalIndexed = 0, totalMediaSeen = 0;
             List<DriveIndexFailure> allFailures = new ArrayList<>();
 
-            // Albums are processed sequentially: each album's batches already saturate the GPU-bound AI service, so parallel albums would only add contention.
             for (Album album : albums) {
                 List<MediaItem> mediaToIndex = mediaItemRepository
                         .findByAlbumAndDeletedInDriveFalseAndIndexingStatusIn(album, NEEDS_INDEXING_STATUSES);
+
                 totalMediaSeen += mediaItemRepository.countByAlbumAndDeletedInDriveFalse(album);
+
                 MediaIndexingResult indexingResult = mediaItemIndexingService.indexMediaItems(album, mediaToIndex);
+
                 if (indexingResult.indexedCount() > 0) album.setLastIndexedAt(Instant.now());
+
                 totalIndexed += indexingResult.indexedCount();
                 allFailures.addAll(indexingResult.failures());
             }
 
             syncRunService.finishFromResult(syncRun, albums.size(), totalMediaSeen, totalIndexed,
                     allFailures.size(), "Some photos failed to index.");
+
             return albumIndexStatusService.buildDriveIndexResult(albums.size(), albums, totalIndexed, allFailures);
         } catch (Exception e) {
             syncRunService.finishFailed(syncRun, e);
@@ -144,6 +164,7 @@ public class DriveAiIndexingService {
             mediaItem.setFaissIndexedAt(null);
             mediaItem.setIndexingError(null);
         }
+
         mediaItemRepository.saveAll(mediaItems);
     }
 }

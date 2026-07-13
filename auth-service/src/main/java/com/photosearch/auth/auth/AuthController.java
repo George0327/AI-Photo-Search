@@ -22,6 +22,7 @@ public class AuthController {
         }
 
         Object principal = authentication.getPrincipal();
+
         if (!(principal instanceof OidcUser user)) {
             return Map.of("authenticated", false, "sub", "", "email", "",
                     "name", "", "picture", "", "authorities", List.of());

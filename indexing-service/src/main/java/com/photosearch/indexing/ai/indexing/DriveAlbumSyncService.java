@@ -32,16 +32,20 @@ public class DriveAlbumSyncService {
 
         for (DriveFileInfo driveAlbum : driveAlbums) {
             currentDriveAlbumIds.add(driveAlbum.getId());
+
             Album album = syncAlbumMetadata(driveAlbum.getId());
+
             if (!Objects.equals(album.getYear(), driveAlbum.getYear())) {
                 album.setYear(driveAlbum.getYear());
                 albumRepository.save(album);
             }
+
             syncedAlbums.add(album);
         }
 
         List<Album> activeDbAlbums = albumRepository.findByDeletedInDriveFalseOrderByTitleAsc();
         List<Album> toDisable = new ArrayList<>();
+
         for (Album album : activeDbAlbums) {
             if (!currentDriveAlbumIds.contains(album.getDriveFolderId())) {
                 album.setDeletedInDrive(true);
@@ -49,6 +53,7 @@ public class DriveAlbumSyncService {
                 toDisable.add(album);
             }
         }
+
         if (!toDisable.isEmpty()) albumRepository.saveAll(toDisable);
 
         return syncedAlbums;
@@ -67,9 +72,11 @@ public class DriveAlbumSyncService {
         album = albumRepository.save(album);
 
         syncMediaItemsForAlbum(album);
+
         return album;
     }
 
+    // upserts the album's photos and flags the ones that changed or disappeared in Drive
     private void syncMediaItemsForAlbum(Album album) {
         List<DriveFileInfo> driveImages = googleDriveService.listImagesInAlbum(album.getDriveFolderId());
         Set<String> currentDriveFileIds = new HashSet<>();
@@ -78,6 +85,7 @@ public class DriveAlbumSyncService {
 
         for (DriveFileInfo driveImage : driveImages) {
             if (!isSupportedDriveImage(driveImage)) continue;
+
             currentDriveFileIds.add(driveImage.getId());
 
             MediaItem mediaItem = mediaItemRepository.findByDriveFileId(driveImage.getId())
@@ -91,16 +99,18 @@ public class DriveAlbumSyncService {
             if (driveFileChanged && mediaItem.getIndexingStatus() == IndexingStatus.INDEXED) {
                 mediaItem.setIndexingStatus(IndexingStatus.STALE);
             }
+
             if (mediaItem.getIndexingStatus() == IndexingStatus.DELETED) {
                 mediaItem.setIndexingStatus(IndexingStatus.NOT_INDEXED);
                 mediaItem.setFaissIndexedAt(null);
                 mediaItem.setIndexingError(null);
             }
 
-            // Face indexing follows the same lifecycle as CLIP indexing.
+            // faces follow the same lifecycle
             if (driveFileChanged && mediaItem.getFaceIndexingStatus() == IndexingStatus.INDEXED) {
                 mediaItem.setFaceIndexingStatus(IndexingStatus.STALE);
             }
+
             if (mediaItem.getFaceIndexingStatus() == IndexingStatus.DELETED) {
                 mediaItem.setFaceIndexingStatus(IndexingStatus.NOT_INDEXED);
                 mediaItem.setFaceIndexedAt(null);
@@ -115,6 +125,7 @@ public class DriveAlbumSyncService {
             mediaItem.setModifiedInDriveAt(driveImage.getModifiedTime());
             mediaItem.setLastSeenInDriveAt(now);
             mediaItem.setDeletedInDrive(false);
+
             toSave.add(mediaItem);
         }
 
@@ -125,6 +136,7 @@ public class DriveAlbumSyncService {
     private void markMissingAsDeleted(Album album, Set<String> currentDriveFileIds) {
         List<MediaItem> existing = mediaItemRepository.findByAlbumAndDeletedInDriveFalseOrderByCreatedInDriveAtDesc(album);
         List<MediaItem> toDelete = new ArrayList<>();
+
         for (MediaItem item : existing) {
             if (!currentDriveFileIds.contains(item.getDriveFileId())) {
                 item.setDeletedInDrive(true);
@@ -132,9 +144,11 @@ public class DriveAlbumSyncService {
                 item.setIndexingError("Deleted from Google Drive.");
                 item.setFaceIndexingStatus(IndexingStatus.DELETED);
                 item.setFaceIndexingError("Deleted from Google Drive.");
+
                 toDelete.add(item);
             }
         }
+
         if (!toDelete.isEmpty()) mediaItemRepository.saveAll(toDelete);
     }
 

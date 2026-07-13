@@ -13,7 +13,7 @@ export async function extractErrorMessage(response: Response): Promise<string> {
       return body.error;
     }
   } catch {
-    // Body was not JSON — fall through to the generic status message.
+    // not JSON, so fall back to the status message below
   }
   return `Request failed: ${response.status} ${response.statusText}`;
 }

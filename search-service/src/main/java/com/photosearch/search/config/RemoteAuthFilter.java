@@ -46,6 +46,7 @@ public class RemoteAuthFilter extends OncePerRequestFilter {
         this.restTemplate = restTemplate;
     }
 
+    // forwards the session cookie to auth-service and builds the authentication from its answer
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
@@ -55,18 +56,22 @@ public class RemoteAuthFilter extends OncePerRequestFilter {
 
         if (cookieHeader != null) {
             Object[] cached = tokenCache.get(cookieHeader);
+
             if (cached != null) {
                 if (System.currentTimeMillis() < (long) cached[1]) {
                     SecurityContextHolder.getContext().setAuthentication((Authentication) cached[0]);
                     filterChain.doFilter(request, response);
+
                     return;
                 }
+
                 tokenCache.remove(cookieHeader);
             }
 
             try {
                 HttpHeaders headers = new HttpHeaders();
                 headers.set("Cookie", cookieHeader);
+
                 HttpEntity<Void> entity = new HttpEntity<>(headers);
 
                 ResponseEntity<Map> authResponse = restTemplate.exchange(
@@ -77,25 +82,31 @@ public class RemoteAuthFilter extends OncePerRequestFilter {
                 );
 
                 Map<?, ?> body = authResponse.getBody();
+
                 if (body != null && Boolean.TRUE.equals(body.get("authenticated"))) {
                     List<?> rawAuthorities = (List<?>) body.get("authorities");
+
                     List<SimpleGrantedAuthority> authorities = rawAuthorities == null ? List.of() :
                             rawAuthorities.stream()
                                     .map(a -> new SimpleGrantedAuthority(a.toString()))
                                     .toList();
 
                     String email = (String) body.get("email");
+
                     UsernamePasswordAuthenticationToken auth =
                             new UsernamePasswordAuthenticationToken(email, null, authorities);
+
                     SecurityContextHolder.getContext().setAuthentication(auth);
                     cacheAuthentication(cookieHeader, auth);
                 }
             } catch (HttpClientErrorException e) {
-                // auth-service rejected the session — proceed unauthenticated; Spring Security will return 401/403.
+                // session rejected: carry on unauthenticated and let Spring Security answer 401/403
                 logger.debug("Auth service rejected session: {}", e.getStatusCode());
             } catch (Exception e) {
+                // fail closed if auth-service is down
                 logger.warn("Auth service unreachable: {}", e.getMessage());
                 response.sendError(HttpServletResponse.SC_SERVICE_UNAVAILABLE, "Auth service unavailable");
+
                 return;
             }
         }
@@ -105,23 +116,29 @@ public class RemoteAuthFilter extends OncePerRequestFilter {
 
     private void cacheAuthentication(String cookieHeader, Authentication auth) {
         long now = System.currentTimeMillis();
+
         if (tokenCache.size() >= MAX_CACHE_ENTRIES) {
             tokenCache.values().removeIf(entry -> now >= (long) entry[1]);
         }
+
+        // still full after dropping expired entries, so evict an arbitrary one to stay bounded
         if (tokenCache.size() >= MAX_CACHE_ENTRIES) {
-            // Still full after dropping expired entries — evict an arbitrary one to stay bounded.
             Iterator<String> it = tokenCache.keySet().iterator();
+
             if (it.hasNext()) {
                 it.next();
                 it.remove();
             }
         }
+
         tokenCache.put(cookieHeader, new Object[]{auth, now + CACHE_TTL_MS});
     }
 
     private String buildCookieHeader(HttpServletRequest request) {
         Cookie[] cookies = request.getCookies();
+
         if (cookies == null) return null;
+
         return Arrays.stream(cookies)
                 .map(c -> c.getName() + "=" + c.getValue())
                 .reduce((a, b) -> a + "; " + b)

@@ -14,6 +14,7 @@ public class GoogleDomainAccessService {
     @Value("${app.security.allowed-domain}")
     private String allowedDomain;
 
+    // only verified accounts of the organisation's Google Workspace domain may sign in
     public void validateAccess(OidcUser oidcUser) {
         String email = oidcUser.getEmail();
         Boolean emailVerified = oidcUser.getEmailVerified();
@@ -22,6 +23,7 @@ public class GoogleDomainAccessService {
         if (email == null || email.isBlank()) {
             throw accessDenied("Missing email in Google account.");
         }
+
         if (!Boolean.TRUE.equals(emailVerified)) {
             throw accessDenied("Google email is not verified.");
         }
@@ -32,6 +34,8 @@ public class GoogleDomainAccessService {
         if (!normalizedEmail.endsWith(expectedSuffix)) {
             throw accessDenied("Access is restricted to " + allowedDomain + " accounts.");
         }
+
+        // "hd" is the Google Workspace domain, and it cannot be forged the way an address can
         if (hostedDomain == null || !hostedDomain.equalsIgnoreCase(allowedDomain)) {
             throw accessDenied("Hosted domain is not allowed.");
         }
@@ -39,6 +43,7 @@ public class GoogleDomainAccessService {
 
     private OAuth2AuthenticationException accessDenied(String message) {
         OAuth2Error error = new OAuth2Error("access_denied", message, null);
+
         return new OAuth2AuthenticationException(error, message);
     }
 }

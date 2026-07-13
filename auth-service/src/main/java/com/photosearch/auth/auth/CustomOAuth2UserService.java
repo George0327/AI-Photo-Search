@@ -24,7 +24,7 @@ public class CustomOAuth2UserService extends OidcUserService {
     private final GoogleDomainAccessService googleDomainAccessService;
     private final UserRepository userRepository;
 
-    // Bootstrap: a configured email is auto-promoted to OWNER on login (the first OWNER cannot be created in-app). Blank disables it.
+    // auto-promoted to OWNER on login, since the first OWNER cannot be created in-app. blank disables it
     @Value("${app.security.owner-email:}")
     private String ownerEmail;
 
@@ -66,8 +66,10 @@ public class CustomOAuth2UserService extends OidcUserService {
                 && ownerEmail.trim().equalsIgnoreCase(user.getEmail())
                 && user.getRole() != UserRole.OWNER) {
             user.setRole(UserRole.OWNER);
+
             return userRepository.save(user);
         }
+
         return user;
     }
 
@@ -76,6 +78,7 @@ public class CustomOAuth2UserService extends OidcUserService {
         user.setFullName(fullName);
         user.setProfilePictureUrl(pictureUrl);
         user.setActive(true);
+
         return userRepository.save(user);
     }
 
@@ -88,6 +91,7 @@ public class CustomOAuth2UserService extends OidcUserService {
                 .role(UserRole.USER)
                 .active(true)
                 .build();
+
         return userRepository.save(user);
     }
 }

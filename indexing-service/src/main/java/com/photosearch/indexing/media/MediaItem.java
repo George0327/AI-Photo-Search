@@ -46,7 +46,7 @@ public class MediaItem {
     private Instant faissIndexedAt;
     @Column(length = 2000) private String indexingError;
 
-    // Face indexing tracked per item, mirroring the CLIP lifecycle above.
+    // faces are tracked separately, mirroring the CLIP lifecycle above
     @Enumerated(EnumType.STRING)
     @Column(name = "face_indexing_status", nullable = false, length = 30) @Builder.Default
     private IndexingStatus faceIndexingStatus = IndexingStatus.NOT_INDEXED;

@@ -15,18 +15,20 @@ public class SyncRunService {
 
     private final SyncRunRepository syncRunRepository;
 
+    // started_by_user_id stays unset: the caller's identity lives in identity_db, not here
     public SyncRun start(SyncType type, String targetAlbumDriveId) {
-        // started_by_user_id is left unset: caller identity lives in identity_db and is resolved via auth /api/auth/me, not mapped here.
         SyncRun syncRun = SyncRun.builder()
                 .type(type).status(SyncStatus.RUNNING)
                 .targetAlbumDriveId(targetAlbumDriveId).startedAt(Instant.now())
                 .build();
+
         return syncRunRepository.save(syncRun);
     }
 
     public void setTargetAlbum(SyncRun syncRun, String driveAlbumId, String title) {
         syncRun.setTargetAlbumDriveId(driveAlbumId);
         syncRun.setTargetAlbumTitle(title);
+
         syncRunRepository.save(syncRun);
     }
 
@@ -36,8 +38,10 @@ public class SyncRunService {
         syncRun.setMediaSeen(mediaSeen);
         syncRun.setMediaIndexed(mediaIndexed);
         syncRun.setMediaFailed(mediaFailed);
+
         if (mediaFailed == 0) syncRun.markSuccess();
         else syncRun.markPartial(partialMessage);
+
         syncRunRepository.save(syncRun);
     }
 

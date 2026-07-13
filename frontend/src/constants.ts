@@ -3,8 +3,7 @@ export const PHOTOS_PER_PAGE = 20;
 export const SIDEBAR_WIDTH = 300;
 export const SIDEBAR_SCROLL_HEIGHT = "calc(100vh - 280px)";
 
-// Admin status polling: start at the base interval and back off up to the max
-// while nothing is changing, snapping back to the base whenever progress moves.
+// admin polling backs off towards the max while nothing changes, and resets on progress
 export const ADMIN_POLL_INTERVAL_MS = 3000;
 export const ADMIN_POLL_MAX_INTERVAL_MS = 15000;
 

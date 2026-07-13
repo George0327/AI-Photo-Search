@@ -34,7 +34,7 @@ type AlbumIndexTableProps = {
 
 type StopTarget = { album: AlbumIndexStatus; kind: "clip" | "faces" };
 
-// Shared badge logic so the CLIP and Faces columns behave identically.
+// shared, so the CLIP and Faces columns behave the same
 function indexBadge(
   busy: boolean,
   needsIndex: number,
@@ -66,7 +66,7 @@ export function AlbumIndexTable({
   onStopIndex,
   onStopFaces,
 }: AlbumIndexTableProps) {
-  // Which run the admin is about to stop (drives the confirmation modal).
+  // the run the admin is about to stop, which drives the confirmation modal
   const [stopTarget, setStopTarget] = useState<StopTarget | null>(null);
 
   function confirmStop() {

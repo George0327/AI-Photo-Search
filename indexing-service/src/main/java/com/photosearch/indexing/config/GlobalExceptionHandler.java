@@ -31,12 +31,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ResourceAccessException.class)
     public ResponseEntity<Map<String, String>> handleResourceAccess(ResourceAccessException ex) {
         logger.warn("AI service unreachable: {}", ex.getMessage());
+
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(Map.of("error", "AI service is not available. Please wait a moment and try again."));
     }
 
-    // AccessDenied (@PreAuthorize) must return 403, not fall through to the catch-all's 500.
+    // 403, so it does not fall through to the catch-all below
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<Map<String, String>> handleAccessDenied(AccessDeniedException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
@@ -44,7 +45,7 @@ public class GlobalExceptionHandler {
                 .body(Map.of("error", "You do not have permission to perform this action."));
     }
 
-    // Bean-validation failures must return 400, not fall through to the catch-all's 500.
+    // 400, so it does not fall through to the catch-all below
     @ExceptionHandler({MethodArgumentNotValidException.class,
             HandlerMethodValidationException.class, ConstraintViolationException.class})
     public ResponseEntity<Map<String, String>> handleValidation(Exception ex) {
@@ -56,6 +57,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, String>> handleGeneral(Exception ex) {
         logger.error("Unhandled exception", ex);
+
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(Map.of("error", "Internal server error"));

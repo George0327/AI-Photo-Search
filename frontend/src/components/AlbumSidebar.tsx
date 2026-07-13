@@ -52,7 +52,7 @@ function indexTooltip(kind: string, indexed: number, total: number): string {
   return `${kind}: ${indexed} of ${total} photos searchable`;
 }
 
-// Memoized: with hundreds of albums, only rows whose selection state changed should re-render.
+// memoized: with hundreds of albums, only the rows that changed should re-render
 const AlbumRow = memo(function AlbumRow({
   album, status, isBrowsing, checkedForSearch, onSelectAlbum, onSearchAlbumToggle,
 }: AlbumRowProps) {
@@ -127,7 +127,7 @@ export function AlbumSidebar({
   onSelectAllForSearch,
   onClearSearchSelection,
 }: AlbumSidebarProps) {
-  // Albums checked for search are mirrored into a collapsed "Selected" accordion at the top; they also stay in their year groups below.
+  // the checked albums are mirrored into a "Selected" group, and also stay under their year
   const { selectedAlbums, yearGroups, sortedYears, ungrouped } = useMemo(() => {
     const selectedIdSet = new Set(selectedSearchAlbumIds);
     const selectedList: DriveFileInfo[] = [];

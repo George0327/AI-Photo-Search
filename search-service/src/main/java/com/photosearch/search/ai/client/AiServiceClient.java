@@ -35,8 +35,10 @@ public class AiServiceClient {
 
     public AiSearchResponse search(String query, int topK, List<String> albumIds, List<String> restrictIds) {
         AiSearchRequest body = new AiSearchRequest(query, topK, albumIds, restrictIds);
+
         HttpHeaders headers = createInternalHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
+
         return withRetry("search", () -> restTemplate.postForObject(properties.getBaseUrl() + "/search",
                 new HttpEntity<>(body, headers), AiSearchResponse.class));
     }
@@ -46,56 +48,70 @@ public class AiServiceClient {
             List<String> albumIds, int topK, List<String> restrictIds) {
         HttpEntity<MultiValueMap<String, Object>> request =
                 buildDetectionSearchRequest(referenceImages, fileNames, albumIds, topK, restrictIds);
+
         return withRetry("face search", () -> restTemplate.postForObject(
                 properties.getBaseUrl() + "/search/faces", request, AiFaceSearchResponse.class));
     }
 
-    /** Retries transient failures (connection problems, AI 5xx) with exponential backoff; 4xx client errors are not retried. */
+    // retries transient failures with exponential backoff; 4xx client errors are not retried
     private <T> T withRetry(String operation, Supplier<T> call) {
         long backoffMs = INITIAL_BACKOFF_MS;
+
         for (int attempt = 1; ; attempt++) {
             try {
                 return call.get();
             } catch (ResourceAccessException | HttpServerErrorException e) {
                 if (attempt >= MAX_ATTEMPTS) throw e;
+
                 log.warn("AI service call '{}' failed (attempt {}/{}): {} — retrying in {} ms",
                         operation, attempt, MAX_ATTEMPTS, e.getMessage(), backoffMs);
+
                 try {
                     Thread.sleep(backoffMs);
                 } catch (InterruptedException interrupted) {
                     Thread.currentThread().interrupt();
                     throw e;
                 }
+
                 backoffMs *= 2;
             }
         }
     }
 
+    // the reference photos and the search options travel as one multipart request
     private HttpEntity<MultiValueMap<String, Object>> buildDetectionSearchRequest(
             List<byte[]> referenceImages, List<String> fileNames,
             List<String> albumIds, int topK, List<String> restrictIds) {
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+
         for (int i = 0; i < referenceImages.size(); i++) {
             final byte[] bytes = referenceImages.get(i);
             final String name = fileNames.get(i);
+
             HttpHeaders fh = new HttpHeaders();
             fh.setContentType(MediaType.IMAGE_JPEG);
+
             body.add("files", new HttpEntity<>(new ByteArrayResource(bytes) {
                 @Override public String getFilename() { return name; }
                 @Override public long contentLength() { return bytes.length; }
             }, fh));
         }
+
         albumIds.forEach(id -> body.add("album_ids", id));
         body.add("top_k", String.valueOf(topK));
+
         if (restrictIds != null) restrictIds.forEach(id -> body.add("restrict_ids", id));
+
         HttpHeaders headers = createInternalHeaders();
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+
         return new HttpEntity<>(body, headers);
     }
 
     private HttpHeaders createInternalHeaders() {
         HttpHeaders headers = new HttpHeaders();
         headers.set(INTERNAL_API_KEY_HEADER, properties.getInternalApiKey());
+
         return headers;
     }
 }

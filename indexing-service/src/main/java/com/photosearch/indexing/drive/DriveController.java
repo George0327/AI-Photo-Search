@@ -27,10 +27,11 @@ public class DriveController {
     @GetMapping("/albums")
     public List<DriveFileInfo> listAlbums() {
         String rootId = googleDriveService.resolveRootFolderId();
+
         return googleDriveService.listAlbumFolders(rootId);
     }
 
-    /** Indexing summary for the gallery sidebar — available to every user, DB-only (no Drive calls). */
+    // indexing summary for the gallery sidebar, DB-only (no Drive calls)
     @GetMapping("/albums/index-status")
     public List<AlbumSearchStatus> getAlbumSearchStatuses() {
         return driveAiIndexingService.getAlbumIndexStatuses().stream()
@@ -41,8 +42,10 @@ public class DriveController {
     @GetMapping("/albums/{albumId}/images")
     public List<DriveFileInfo> listImages(@PathVariable String albumId) {
         List<DriveFileInfo> images = googleDriveService.listImagesInAlbum(albumId);
+
         albumRepository.findByDriveFolderId(albumId).ifPresent(album ->
                 images.forEach(img -> img.setName(PhotoNaming.displayName(album.getTitle(), img.getName()))));
+
         return images;
     }
 
@@ -51,6 +54,7 @@ public class DriveController {
         DriveFileInfo fileInfo = googleDriveService.getFileInfo(fileId);
         byte[] imageBytes = googleDriveService.downloadFileBytes(fileId);
         MediaType mediaType = parseImageMediaType(fileInfo.getMimeType());
+
         return ResponseEntity.ok().contentType(mediaType)
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         ContentDisposition.inline().filename(fileInfo.getName(), StandardCharsets.UTF_8).build().toString())
@@ -60,10 +64,13 @@ public class DriveController {
     @GetMapping("/images/{fileId}/thumbnail")
     public ResponseEntity<byte[]> getImageThumbnail(@PathVariable String fileId) {
         DriveFileInfo fileInfo = googleDriveService.getFileInfo(fileId);
+
         if (fileInfo.getMimeType() == null || !fileInfo.getMimeType().startsWith("image/")) {
             return ResponseEntity.badRequest().build();
         }
+
         byte[] thumbnailBytes = googleDriveService.downloadGoogleThumbnailBytes(fileId);
+
         return ResponseEntity.ok().contentType(MediaType.IMAGE_JPEG)
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         ContentDisposition.inline().filename("thumbnail-" + fileInfo.getName(), StandardCharsets.UTF_8).build().toString())
@@ -73,16 +80,20 @@ public class DriveController {
     @GetMapping("/images/{fileId}/download")
     public ResponseEntity<byte[]> downloadImage(@PathVariable String fileId) {
         DriveFileInfo fileInfo = googleDriveService.getFileInfo(fileId);
+
         if (fileInfo.getMimeType() == null || !fileInfo.getMimeType().startsWith("image/")) {
             return ResponseEntity.badRequest().build();
         }
+
         byte[] imageBytes = googleDriveService.downloadFileBytes(fileId);
         MediaType mediaType = parseImageMediaType(fileInfo.getMimeType());
+
         String downloadName = mediaItemRepository.findByDriveFileId(fileId)
                 .map(item -> PhotoNaming.displayName(
                         Optional.ofNullable(item.getAlbum()).map(Album::getTitle).orElse(null),
                         item.getFilename()))
                 .orElse(fileInfo.getName());
+
         return ResponseEntity.ok().contentType(mediaType)
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         ContentDisposition.attachment().filename(downloadName, StandardCharsets.UTF_8).build().toString())
@@ -91,6 +102,7 @@ public class DriveController {
 
     private MediaType parseImageMediaType(String mimeType) {
         if (mimeType != null && mimeType.startsWith("image/")) return MediaType.parseMediaType(mimeType);
+
         return MediaType.APPLICATION_OCTET_STREAM;
     }
 }

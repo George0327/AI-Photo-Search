@@ -21,7 +21,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-/** Persists each search per user and serves the history (for "search within results" and recall), pruned to {@code app.search.saved-history-limit} entries per user. */
+// persists each search per user and serves the history, pruned to a per-user limit
 @Service
 @RequiredArgsConstructor
 public class SavedSearchService {
@@ -32,10 +32,11 @@ public class SavedSearchService {
     @Value("${app.search.saved-history-limit:20}")
     private int historyLimit;
 
-    /** Records a completed search. No-op if there is no user or no results to remember. */
+    // no-op if there is no user or no results to remember
     @Transactional
     public void save(String searchType, String queryText, List<String> albumIds, List<String> resultFileIds) {
         String email = currentUserEmail();
+
         if (email == null || resultFileIds == null || resultFileIds.isEmpty()) return;
 
         repository.save(SavedSearch.builder()
@@ -49,6 +50,7 @@ public class SavedSearchService {
                 .build());
 
         List<SavedSearch> all = repository.findByUserEmailOrderByCreatedAtDesc(email);
+
         if (all.size() > historyLimit) {
             repository.deleteAll(all.subList(historyLimit, all.size()));
         }
@@ -60,13 +62,12 @@ public class SavedSearchService {
                 .toList();
     }
 
-    /** Deletes the current user's entire saved-search history. */
     @Transactional
     public void clearAll() {
         repository.deleteByUserEmail(currentUserEmail());
     }
 
-    /** Re-hydrates a saved search's stored photo IDs (preserving ranked order) into displayable results. */
+    // re-hydrates the stored photo IDs into displayable results, ranked order preserved
     public SavedSearchResults recall(Long id) {
         SavedSearch saved = repository.findByIdAndUserEmail(id, currentUserEmail())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Saved search not found."));
@@ -77,11 +78,16 @@ public class SavedSearchService {
                         .collect(Collectors.toMap(MediaItem::getDriveFileId, Function.identity()));
 
         List<RecalledResult> results = new ArrayList<>();
-        for (String fileId : ids) {                       // preserve the stored ranked order
+
+        // iterate the stored ids, so the ranked order survives
+        for (String fileId : ids) {
             MediaItem item = byId.get(fileId);
-            if (item == null) continue;                   // photo since deleted in Drive — skip
+
+            if (item == null) continue;
+
             results.add(new RecalledResult(item.getAlbum().getDriveFolderId(), driveFileInfoFrom(item)));
         }
+
         return new SavedSearchResults(saved.getId(), saved.getSearchType(), saved.getQueryText(), results);
     }
 
@@ -97,11 +103,13 @@ public class SavedSearchService {
 
     private static List<String> splitIds(String csv) {
         if (csv == null || csv.isBlank()) return List.of();
+
         return Arrays.stream(csv.split(",")).filter(s -> !s.isBlank()).toList();
     }
 
     private String currentUserEmail() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+
         return auth != null ? auth.getName() : null;
     }
 

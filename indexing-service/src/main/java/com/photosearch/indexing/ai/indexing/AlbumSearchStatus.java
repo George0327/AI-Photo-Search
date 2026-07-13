@@ -1,6 +1,6 @@
 package com.photosearch.indexing.ai.indexing;
 
-/** Per-album indexing summary for regular users, so the gallery shows which albums are searchable by text and by face. */
+// per-album indexing summary, so the gallery can show which albums are searchable
 public record AlbumSearchStatus(
         String driveAlbumId,
         long totalActiveImages,

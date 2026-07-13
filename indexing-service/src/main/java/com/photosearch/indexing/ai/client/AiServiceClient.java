@@ -38,6 +38,7 @@ public class AiServiceClient {
 
     public AiIndexResponse resetAlbumIndex(String albumId) {
         HttpEntity<Void> request = new HttpEntity<>(createInternalHeaders());
+
         return withRetry("reset album index", () -> restTemplate.postForObject(
                 properties.getBaseUrl() + "/index/albums/" + albumId + "/reset",
                 request, AiIndexResponse.class));
@@ -45,6 +46,7 @@ public class AiServiceClient {
 
     public AiIndexResponse resetAlbumFaceIndex(String albumId) {
         HttpEntity<Void> request = new HttpEntity<>(createInternalHeaders());
+
         return withRetry("reset album face index", () -> restTemplate.postForObject(
                 properties.getBaseUrl() + "/index/albums/" + albumId + "/faces/reset",
                 request, AiIndexResponse.class));
@@ -52,6 +54,7 @@ public class AiServiceClient {
 
     public AiBatchIndexResponse indexAlbumImageBatch(String albumId, List<AiImagePayload> images) {
         HttpEntity<MultiValueMap<String, Object>> request = buildBatchMultipart(images);
+
         return withRetry("index image batch", () -> restTemplate.postForObject(
                 properties.getBaseUrl() + "/index/albums/" + albumId + "/batch",
                 request, AiBatchIndexResponse.class));
@@ -59,41 +62,50 @@ public class AiServiceClient {
 
     public AiFaceBatchIndexResponse indexAlbumFacesBatch(String albumId, List<AiImagePayload> images) {
         HttpEntity<MultiValueMap<String, Object>> request = buildBatchMultipart(images);
+
         return withRetry("index face batch", () -> restTemplate.postForObject(
                 properties.getBaseUrl() + "/index/albums/" + albumId + "/faces/batch",
                 request, AiFaceBatchIndexResponse.class));
     }
 
-    /** Retries transient failures (connection problems, AI 5xx) with exponential backoff; 4xx client errors are not retried. */
+    // retries transient failures with exponential backoff; 4xx client errors are not retried
     private <T> T withRetry(String operation, Supplier<T> call) {
         long backoffMs = INITIAL_BACKOFF_MS;
+
         for (int attempt = 1; ; attempt++) {
             try {
                 return call.get();
             } catch (ResourceAccessException | HttpServerErrorException e) {
                 if (attempt >= MAX_ATTEMPTS) throw e;
+
                 log.warn("AI service call '{}' failed (attempt {}/{}): {} — retrying in {} ms",
                         operation, attempt, MAX_ATTEMPTS, e.getMessage(), backoffMs);
+
                 try {
                     Thread.sleep(backoffMs);
                 } catch (InterruptedException interrupted) {
                     Thread.currentThread().interrupt();
                     throw e;
                 }
+
                 backoffMs *= 2;
             }
         }
     }
 
+    // all the images of a chunk travel as one multipart request
     private HttpEntity<MultiValueMap<String, Object>> buildBatchMultipart(List<AiImagePayload> images) {
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+
         for (AiImagePayload image : images) {
             body.add("files", new HttpEntity<>(fileResource(image.fileName(), image.bytes()),
                     fileHeaders(image.mimeType())));
             body.add("image_ids", image.imageId());
         }
+
         HttpHeaders headers = createInternalHeaders();
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+
         return new HttpEntity<>(body, headers);
     }
 
@@ -106,14 +118,17 @@ public class AiServiceClient {
 
     private static HttpHeaders fileHeaders(String mimeType) {
         HttpHeaders fileHeaders = new HttpHeaders();
+
         fileHeaders.setContentType(mimeType != null
                 ? MediaType.parseMediaType(mimeType) : MediaType.APPLICATION_OCTET_STREAM);
+
         return fileHeaders;
     }
 
     private HttpHeaders createInternalHeaders() {
         HttpHeaders headers = new HttpHeaders();
         headers.set(INTERNAL_API_KEY_HEADER, properties.getInternalApiKey());
+
         return headers;
     }
 }

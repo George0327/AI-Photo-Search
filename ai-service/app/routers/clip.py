@@ -27,10 +27,12 @@ async def reset_album_index(
     _: None = Depends(verify_internal_api_key),
 ):
     loop = asyncio.get_running_loop()
+
     async with _get_lock(_album_locks, album_id):
         store = FaissStore(dimension=state._embedding_dim)
         state._album_stores[album_id] = store
         await loop.run_in_executor(ml_executor, save_album_store, album_id, store)
+
     return {"success": True, "message": f"Album index reset successfully: {album_id}"}
 
 
@@ -41,7 +43,7 @@ async def index_album_batch(
     image_ids: List[str] = Form(...),
     _: None = Depends(verify_internal_api_key),
 ):
-    """Index a batch of images with one CLIP forward pass and one index save."""
+    """index a batch of images with one CLIP forward pass and one index save"""
     if len(files) != len(image_ids):
         raise HTTPException(status_code=422, detail="files and image_ids must have the same length")
 
@@ -51,7 +53,9 @@ async def index_album_batch(
 
     async with _get_lock(_album_locks, album_id):
         store = await loop.run_in_executor(ml_executor, get_cached_store, album_id)
+
     pending = []
+
     for image_id, image_bytes in zip(image_ids, contents):
         if store.contains(image_id):
             results[image_id] = {"image_id": image_id, "success": True,
@@ -67,6 +71,7 @@ async def index_album_batch(
         async with _get_lock(_album_locks, album_id):
             store = await loop.run_in_executor(ml_executor, get_cached_store, album_id)
             added = False
+
             for (image_id, _), vector, error in zip(pending, embeddings, errors):
                 if vector is None:
                     results[image_id] = {"image_id": image_id, "success": False, "message": error}
@@ -78,11 +83,13 @@ async def index_album_batch(
                     added = True
                     results[image_id] = {"image_id": image_id, "success": True,
                                          "message": "Indexed"}
+
             if added:
                 await loop.run_in_executor(ml_executor, save_album_store, album_id, store)
 
     ordered = [results[image_id] for image_id in image_ids]
     failed = sum(1 for r in ordered if not r["success"])
+
     return {"success": failed == 0,
             "message": f"Indexed batch for album {album_id}: {len(ordered) - failed} ok, {failed} failed",
             "results": ordered}
@@ -108,27 +115,30 @@ async def search(
         ml_executor, state.model.text_to_embedding, request.query
     )
 
-    # Optional "search within results": restrict matches to a prior result set.
+    # "search within results": restrict matches to a prior result set
     restrict = set(request.restrict_ids) if request.restrict_ids else None
 
     async def search_album(album_id: str) -> list[dict]:
-        # Get store reference under lock (load happens off the event loop), search outside lock
         async with _get_lock(_album_locks, album_id):
             store = await loop.run_in_executor(ml_executor, get_cached_store, album_id)
+
         if not store.items:
             return []
-        # When restricting, rank the whole album then filter, so subset members aren't crowded out of a small top_k.
+
+        # when restricting, rank the whole album then filter
         k = len(store.items) if restrict is not None else request.top_k
+
         album_results = await loop.run_in_executor(
             ml_executor, lambda s=store: s.search(query_vector, top_k=k)
         )
+
         return [{"item_id": r["item_id"], "album_id": album_id, "score": r["score"]}
                 for r in album_results
                 if restrict is None or r["item_id"] in restrict]
 
     per_album_results = await asyncio.gather(*(search_album(a) for a in album_ids))
     merged_results = [r for album_results in per_album_results for r in album_results]
-
     merged_results.sort(key=lambda r: r["score"], reverse=True)
+
     return {"success": True, "message": "Search completed", "query": request.query,
             "top_k": request.top_k, "results": merged_results[:request.top_k]}

@@ -18,18 +18,20 @@ const SEARCH_LABELS: Record<SearchMode, string> = {
 
 function clampTopK(value: string): number {
   const parsed = Number(value);
+
   if (Number.isNaN(parsed)) return 10;
+
   return Math.min(Math.max(Math.round(parsed), MIN_TOP_K), MAX_TOP_K);
 }
 
 export function useGallery() {
-  // Text searches are reflected in the URL (?q=…&topK=…&albums=…) so results can be bookmarked, shared, and survive a refresh.
+  // text searches live in the URL, so results can be bookmarked and survive a refresh
   const [searchParams, setSearchParams] = useSearchParams();
   const initialQuery = searchParams.get("q") ?? "";
   const initialTopK = searchParams.get("topK") ?? "10";
   const initialAlbumIds = useMemo(
     () => searchParams.get("albums")?.split(",").filter(Boolean) ?? [],
-    // Read once on mount; afterwards the URL follows the state, not the other way.
+    // read once on mount, afterwards the URL follows the state
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
@@ -53,7 +55,7 @@ export function useGallery() {
   const [lastSearchQuery, setLastSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
 
-  // "Search within results": the next search is restricted to the current result set.
+  // the next search only looks inside the current results
   const [withinResults, setWithinResults] = useState(false);
   const [savedSearches, setSavedSearches] = useState<SavedSearchSummary[]>([]);
 
@@ -62,18 +64,20 @@ export function useGallery() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // True until the search restored from the URL (if any) has been re-run.
+  // true until a search restored from the URL has been re-run
   const pendingUrlSearch = useRef(initialQuery.trim().length > 0);
 
   const isSearchActive = activeSearchType !== null;
 
   const visibleImages = useMemo(() => {
     if (isSearchActive) return searchResults.map((r) => r.file);
+
     return images;
   }, [isSearchActive, searchResults, images]);
 
   const searchScores = useMemo(() => {
     if (!isSearchActive) return undefined;
+
     return Object.fromEntries(searchResults.map((r) => [r.file.id, r.score]));
   }, [isSearchActive, searchResults]);
 
@@ -81,6 +85,7 @@ export function useGallery() {
 
   const paginatedImages = useMemo(() => {
     const start = (activePage - 1) * PHOTOS_PER_PAGE;
+
     return visibleImages.slice(start, start + PHOTOS_PER_PAGE);
   }, [visibleImages, activePage]);
 
@@ -91,8 +96,10 @@ export function useGallery() {
     try {
       setError(null);
       setAlbumsLoading(true);
+
       const data = await fetchAlbums();
       setAlbums(data);
+
       if (!selectedAlbum && data.length > 0) {
         setSelectedAlbum(data[0]);
         setSelectedSearchAlbumIds((curr) => (curr.length > 0 ? curr : [data[0].id]));
@@ -102,9 +109,10 @@ export function useGallery() {
     } finally {
       setAlbumsLoading(false);
     }
-    // Status badges are best-effort decoration: failure must not break the gallery.
+    // best-effort: a failed badge must not break the gallery
     try {
       const statuses = await fetchAlbumSearchStatuses();
+
       setAlbumStatuses(Object.fromEntries(statuses.map((s) => [s.driveAlbumId, s])));
     } catch (err) {
       console.warn("Failed to load album index statuses:", err);
@@ -116,6 +124,7 @@ export function useGallery() {
       setError(null);
       setImagesLoading(true);
       setActivePage(1);
+
       const data = await fetchImages(albumId);
       setImages(data);
     } catch (err) {
@@ -159,7 +168,9 @@ export function useGallery() {
       setSearchLoading(true);
       setActivePage(1);
       setWithinResults(false);
+
       const data = await recallSavedSearch(id);
+
       setSearchResults(data.results.map((r) => ({ score: 0, albumId: r.albumId, file: r.file })));
       setActiveSearchType(data.searchType === "FACE" ? "face" : "text");
       setLastSearchQuery(data.queryText ? data.queryText : "recalled search");
@@ -172,27 +183,31 @@ export function useGallery() {
 
   function handleModeChange(mode: SearchMode) {
     setInputMode(mode);
-    // Switching modality normally starts fresh, but with "search within results" on, keep the current results so the user can search the other modality within them.
+    // when searching within results, keep them so the other mode can search inside them
     if (isSearchActive && !withinResults) clearSearch();
   }
 
   async function runTextSearch(query: string, albumIds: string[], restrictToIds?: string[]) {
     const effectiveTopK = clampTopK(topK);
+
     try {
       setError(null);
       setSearchLoading(true);
       setActivePage(1);
+
       const data = await searchPhotos(query, effectiveTopK, albumIds, restrictToIds);
+
       setSearchResults(data.results);
       setActiveSearchType("text");
       setLastSearchQuery(restrictToIds ? `${query} (within results)` : query);
-      // Only plain searches are reflected in the URL; a refine can't be bookmarked.
+      // only plain searches go in the URL, a refine cannot be bookmarked
       if (!restrictToIds) {
         setSearchParams(
           { q: query, topK: String(effectiveTopK), albums: albumIds.join(",") },
           { replace: true },
         );
       }
+
       loadSavedSearches();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Search failed.");
@@ -202,7 +217,7 @@ export function useGallery() {
   }
 
   async function handleSearch() {
-    // "Search within results": restrict to the current results and scope to their albums.
+    // restrict to the current results and narrow the albums down to theirs
     const refine = withinResults && isSearchActive && searchResults.length > 0;
     const restrictToIds = refine ? searchResults.map((r) => r.file.id) : undefined;
     const effectiveAlbumIds = refine
@@ -216,8 +231,11 @@ export function useGallery() {
 
     if (inputMode === "text") {
       const trimmed = searchQuery.trim();
+
       if (!trimmed) return;
+
       await runTextSearch(trimmed, effectiveAlbumIds, restrictToIds);
+
       return;
     }
 
@@ -232,9 +250,11 @@ export function useGallery() {
       setActivePage(1);
 
       const data = await searchByFace(referenceFiles, effectiveAlbumIds, clampTopK(topK), restrictToIds);
+
       setSearchResults(data.results);
       setActiveSearchType("face");
       setLastSearchQuery(`${referenceFiles.length} reference photo${referenceFiles.length > 1 ? "s" : ""}${refine ? " (within results)" : ""}`);
+
       loadSavedSearches();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Search failed.");
@@ -246,11 +266,13 @@ export function useGallery() {
   function headerTitle() {
     if (!isSearchActive) return selectedAlbum?.name || "Select an album";
     if (activeSearchType === "text") return `Results for "${lastSearchQuery}"`;
+
     return `Face search — ${lastSearchQuery}`;
   }
 
   function headerSubtitle() {
     if (!isSearchActive) return `${images.length} photos in gallery`;
+
     return `${searchResults.length} matching photos found`;
   }
 
@@ -263,14 +285,18 @@ export function useGallery() {
     }
   }, [selectedAlbum, loadImages]);
 
-  // Re-run a text search restored from the URL once albums are available.
+  // re-run a search restored from the URL, once the albums are there
   useEffect(() => {
     if (!pendingUrlSearch.current || albums.length === 0) return;
+
     pendingUrlSearch.current = false;
+
     const query = searchQuery.trim();
+
     const albumIds = selectedSearchAlbumIds.length > 0
       ? selectedSearchAlbumIds
       : albums.map((a) => a.id);
+
     if (query) runTextSearch(query, albumIds);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [albums]);

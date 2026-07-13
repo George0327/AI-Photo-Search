@@ -55,12 +55,14 @@ public class MediaItemIndexingService {
         this.batchSize = Math.max(1, batchSize);
     }
 
+    // splits the work into chunks and runs them in parallel on the indexing pool
     public MediaIndexingResult indexMediaItems(Album album, List<MediaItem> mediaItems) {
         String albumFolderId = album.getDriveFolderId();
         AtomicInteger indexedCount = new AtomicInteger(0);
         CopyOnWriteArrayList<DriveIndexFailure> failures = new CopyOnWriteArrayList<>();
 
         List<MediaItem> indexable = new ArrayList<>();
+
         for (MediaItem item : mediaItems) {
             if (item.isDeletedInDrive()) {
                 failures.add(new DriveIndexFailure(item.getDriveFileId(), item.getFilename(),
@@ -70,12 +72,14 @@ public class MediaItemIndexingService {
             }
         }
 
-        // Chunks run in parallel on the indexing pool; each is downloaded from Drive and sent as one batch (one AI forward pass, one index save).
         cancellationRegistry.begin(IndexingCancellationRegistry.Kind.CLIP, albumFolderId);
+
         try {
             List<CompletableFuture<Void>> futures = new ArrayList<>();
+
             for (int start = 0; start < indexable.size(); start += batchSize) {
                 List<MediaItem> chunk = indexable.subList(start, Math.min(start + batchSize, indexable.size()));
+
                 futures.add(CompletableFuture.runAsync(
                         () -> indexChunk(albumFolderId, chunk, indexedCount, failures), indexingExecutor));
             }
@@ -84,23 +88,27 @@ public class MediaItemIndexingService {
         } finally {
             cancellationRegistry.end(IndexingCancellationRegistry.Kind.CLIP, albumFolderId);
         }
+
         return new MediaIndexingResult(indexedCount.get(), failures);
     }
 
+    // downloads a chunk from Drive in parallel, then sends it to the AI service as one batch
     private void indexChunk(String albumFolderId, List<MediaItem> chunk,
                             AtomicInteger indexedCount, List<DriveIndexFailure> failures) {
-        // Stop requested: bail before touching status so queued items stay NOT_INDEXED (resumable); in-flight chunks finish.
+        // bail before touching status, so queued items stay NOT_INDEXED and the run can resume
         if (cancellationRegistry.isCancelled(IndexingCancellationRegistry.Kind.CLIP, albumFolderId)) {
             return;
         }
+
         for (MediaItem item : chunk) {
             item.setIndexingStatus(IndexingStatus.INDEXING);
             item.setIndexingError(null);
         }
+
         mediaItemRepository.saveAll(chunk);
 
-        // Download the whole chunk in parallel — Drive latency dominates, not the AI service.
         Map<MediaItem, CompletableFuture<byte[]>> downloads = new LinkedHashMap<>();
+
         for (MediaItem item : chunk) {
             downloads.put(item, CompletableFuture.supplyAsync(
                     () -> googleDriveService.downloadFileBytes(item.getDriveFileId()), downloadExecutor));
@@ -108,32 +116,41 @@ public class MediaItemIndexingService {
 
         List<AiImagePayload> payloads = new ArrayList<>();
         List<MediaItem> uploaded = new ArrayList<>();
+
         for (Map.Entry<MediaItem, CompletableFuture<byte[]>> download : downloads.entrySet()) {
             MediaItem item = download.getKey();
+
             try {
                 byte[] imageBytes = download.getValue().join();
+
                 payloads.add(new AiImagePayload(item.getDriveFileId(), item.getFilename(),
                         item.getMimeType(), imageBytes));
                 uploaded.add(item);
             } catch (Exception e) {
                 Throwable cause = e.getCause() != null ? e.getCause() : e;
+
                 log.warn("Download failed [{}]: {}", item.getFilename(), cause.getMessage());
                 markFailed(item, "Drive download failed: " + cause.getMessage(), failures);
             }
         }
+
         if (uploaded.isEmpty()) return;
 
         AiBatchIndexResponse response;
+
         try {
             log.info("Indexing batch of {} image(s)", uploaded.size());
             response = aiServiceClient.indexAlbumImageBatch(albumFolderId, payloads);
         } catch (Exception e) {
             log.warn("AI batch indexing failed: {}", e.getMessage());
+
             for (MediaItem item : uploaded) markFailed(item, e.getMessage(), failures);
+
             return;
         }
 
         Map<String, AiBatchIndexItemResult> resultsByImageId = new HashMap<>();
+
         if (response != null && response.results() != null) {
             for (AiBatchIndexItemResult result : response.results()) {
                 resultsByImageId.put(result.imageId(), result);
@@ -142,6 +159,7 @@ public class MediaItemIndexingService {
 
         for (MediaItem item : uploaded) {
             AiBatchIndexItemResult result = resultsByImageId.get(item.getDriveFileId());
+
             if (result != null && result.success()) {
                 item.setIndexingStatus(IndexingStatus.INDEXED);
                 item.setFaissIndexedAt(Instant.now());
@@ -149,11 +167,13 @@ public class MediaItemIndexingService {
                 indexedCount.incrementAndGet();
             } else {
                 String error = result != null ? result.message() : "No result from AI service for this image.";
+
                 item.setIndexingStatus(IndexingStatus.FAILED);
                 item.setIndexingError(error);
                 failures.add(new DriveIndexFailure(item.getDriveFileId(), item.getFilename(), error));
             }
         }
+
         mediaItemRepository.saveAll(uploaded);
     }
 

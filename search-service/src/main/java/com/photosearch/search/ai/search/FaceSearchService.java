@@ -25,11 +25,13 @@ public class FaceSearchService {
     private final MediaItemRepository mediaItemRepository;
     private final SavedSearchService savedSearchService;
 
+    // the AI service matches the reference photos, then their details are hydrated from the database
     public FaceSearchResponse searchByFace(List<MultipartFile> referenceFiles,
                                             List<String> albumIds, int topK,
                                             List<String> restrictToIds) throws IOException {
         List<byte[]> imageBytesList = new ArrayList<>();
         List<String> fileNames = new ArrayList<>();
+
         for (MultipartFile file : referenceFiles) {
             imageBytesList.add(file.getBytes());
             fileNames.add(file.getOriginalFilename() != null ? file.getOriginalFilename() : "reference.jpg");
@@ -46,21 +48,28 @@ public class FaceSearchService {
 
         List<String> driveFileIds = aiResponse.results().stream()
                 .map(AiFaceSearchResult::itemId).distinct().toList();
-        // No INDEXED filter here (unlike photo search): that status tracks CLIP only, and a photo whose CLIP indexing failed can still be face-indexed — the only guard is that it still exists in Drive.
+
+        // no INDEXED filter here: that status tracks CLIP only, and a photo whose CLIP
+        // indexing failed can still be face-indexed
         Map<String, MediaItem> mediaMap = mediaItemRepository.findActiveByDriveFileIdIn(driveFileIds)
                 .stream().collect(Collectors.toMap(MediaItem::getDriveFileId, Function.identity()));
 
         List<FaceSearchResult> results = new ArrayList<>();
+
         for (AiFaceSearchResult r : aiResponse.results()) {
             if (results.size() >= topK) break;
+
             MediaItem item = mediaMap.get(r.itemId());
+
             if (item == null) continue;
+
             results.add(new FaceSearchResult(r.score(), item.getAlbum().getDriveFolderId(),
                     driveFileInfoFrom(item), r.matchedBbox()));
         }
 
         savedSearchService.save("FACE", null, albumIds,
                 results.stream().map(r -> r.file().getId()).toList());
+
         return new FaceSearchResponse(aiResponse.message(), results);
     }
 

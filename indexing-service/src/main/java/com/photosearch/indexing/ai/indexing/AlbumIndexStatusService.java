@@ -21,7 +21,9 @@ public class AlbumIndexStatusService {
 
     public List<AlbumIndexStatus> buildAlbumIndexStatuses(List<Album> albums) {
         if (albums.isEmpty()) return List.of();
+
         Map<Long, List<MediaStatusCount>> countsByAlbum = groupedCounts(albums);
+
         return albums.stream()
                 .map(album -> buildFromCounts(album, countsByAlbum.getOrDefault(album.getId(), List.of())))
                 .toList();
@@ -30,6 +32,7 @@ public class AlbumIndexStatusService {
     public DriveIndexResult buildDriveIndexResult(int albumCount, List<Album> albums,
                                                    int newlyIndexedCount, List<DriveIndexFailure> failures) {
         long totalActive = 0, indexed = 0, needsIndex = 0, deleted = 0;
+
         if (!albums.isEmpty()) {
             for (List<MediaStatusCount> counts : groupedCounts(albums).values()) {
                 totalActive += sum(counts, c -> !c.getDeleted());
@@ -38,6 +41,7 @@ public class AlbumIndexStatusService {
                 deleted += sum(counts, MediaStatusCount::getDeleted);
             }
         }
+
         return new DriveIndexResult(albumCount, totalActive, indexed, needsIndex, deleted,
                 newlyIndexedCount, failures.size(), failures);
     }

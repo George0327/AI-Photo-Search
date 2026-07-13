@@ -19,7 +19,7 @@ const ANONYMOUS_USER: AuthUser = {
 };
 
 export async function fetchCurrentUser(): Promise<AuthUser> {
-  // Not fetchJson: an unauthenticated /me must resolve to the anonymous user, not dispatch the session-expired event.
+  // plain fetch: a signed-out /me is an anonymous user, not a session-expired error
   try {
     const response = await fetch(`${BASE_URL}/api/auth/me`, { credentials: "include" });
     if (!response.ok) return ANONYMOUS_USER;
@@ -41,7 +41,7 @@ export async function logout() {
       credentials: "include",
     });
   } catch (error) {
-    // Still redirect: the session cookie may already be gone server-side.
+    // redirect anyway, the cookie may already be gone on the server
     console.warn("Logout request failed:", error);
   }
   window.location.href = "/";

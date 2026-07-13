@@ -11,7 +11,7 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-/** On startup, marks items stranded in INDEXING (and albums with the face flag set) by a crash/restart as FAILED, so they don't show as "Indexing…" forever or block new runs with a 409. */
+// on startup, marks items stranded in INDEXING by a crash as FAILED, so they don't block new runs
 @Component
 @RequiredArgsConstructor
 public class IndexingCrashRecovery implements ApplicationRunner {
@@ -27,9 +27,12 @@ public class IndexingCrashRecovery implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         int clip = mediaItemRepository.failStuckClipIndexing(
                 IndexingStatus.INDEXING, IndexingStatus.FAILED, INTERRUPTED_ERROR);
+
         int faces = mediaItemRepository.failStuckFaceIndexing(
                 IndexingStatus.INDEXING, IndexingStatus.FAILED, INTERRUPTED_ERROR);
+
         int flags = albumRepository.clearStuckFaceIndexingFlags();
+
         if (clip > 0 || faces > 0 || flags > 0) {
             log.warn("Recovered interrupted indexing state: {} CLIP item(s), {} face item(s), {} album flag(s)",
                     clip, faces, flags);
